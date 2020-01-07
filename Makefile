@@ -1,5 +1,5 @@
 
-OBJS=hdhrd.o
+OBJS=hdhrd.o mpeg_ts.o
 
 CFLAGS=-O2 -Wall -I/usr/include/libhdhomerun
 
