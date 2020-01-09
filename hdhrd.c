@@ -22,7 +22,19 @@
 
 #include <hdhomerun.h>
 
+#include "arch.h"
+#include "parse.h"
 #include "mpeg_ts.h"
+
+struct pid0_info
+{
+};
+
+struct hdhrd_info
+{
+    struct tmpegts_cb cb;
+    struct pid0_info pid0;
+};
 
 /*****************************************************************************/
 static int
@@ -64,34 +76,47 @@ hex_dump(const void* data, int bytes)
 
 /*****************************************************************************/
 static int
-tmpegts_zero_cb(const void* data, int data_bytes,
-                const struct tmpegts* mpegts, void* udata)
+tmpegts_pid0_cb(struct stream* s, const struct tmpegts* mpegts, void* udata)
 {
-    const unsigned char* data8;
     int pointer_field;
     int table_id;
     int packed_bits;
     int section_length;
+    struct hdhrd_info* hdhrd;
+    int table_id_extension;
+    int program_num;
+    int program_map_pid;
 
-    printf("tmpegts_zero_cb:\n");
-    hex_dump(data, data_bytes);
+    printf("tmpegts_pid0_cb:\n");
+    hdhrd = (struct hdhrd_info*)udata;
 
-    data8 = (const unsigned char*)data;
-    pointer_field = *(data8++);
-    printf("tmpegts_zero_cb: pointer_field %d\n", pointer_field);
-    data8 += pointer_field;
-    table_id = *(data8++);
-    printf("tmpegts_zero_cb: table_id %d\n", table_id);
+    in_uint8(s, pointer_field);
+    //printf("tmpegts_pid0_cb: pointer_field %d\n", pointer_field);
+    in_uint8s(s, pointer_field);
+    in_uint8(s, table_id);
+    //printf("tmpegts_pid0_cb: table_id %d\n", table_id);
 
-    packed_bits = *(data8++);
-    packed_bits <<= 8;
-    packed_bits |= *(data8++);
-
+    in_uint16_be(s, packed_bits);
     section_length = packed_bits & 0x03FF;
-    printf("tmpegts_zero_cb: section_length %d\n", section_length);
-
-    hex_dump(data8, section_length);
-    data8 += section_length;
+    //printf("tmpegts_pid0_cb: section_length %d\n", section_length);
+    //hex_dump(s->p, section_length);
+    s->end = s->p + section_length;
+    if (packed_bits & 0x8000) /* section_syntax_indicator */
+    {
+        in_uint16_be(s, table_id_extension);
+        //printf("tmpegts_pid0_cb: table_id_extension 0x%4.4x\n",
+        //       table_id_extension);
+        in_uint8s(s, 3);
+        while (s->p + 4 < s->end)
+        {
+            in_uint16_be(s, program_num);
+            in_uint16_be(s, program_map_pid);
+            program_map_pid &= 0x1FFF;
+            printf("tmpegts_pid0_cb: program_num 0x%4.4x "
+                   "program_map_pid 0x%4.4x\n",
+                   program_num, program_map_pid);
+        }
+    }
 
     return 0;
 }
@@ -101,13 +126,14 @@ int
 main(int argc, char** argv)
 {
     struct hdhomerun_device_t* hdhr;
+    struct hdhrd_info* hdhrd;
     const char* dev_name;
     uint8_t* data;
     size_t bytes;
     int error;
     int lbytes;
-    struct tmpegts_cb cb;
 
+    hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
     hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
     if (hdhr == NULL)
     {
@@ -120,9 +146,9 @@ main(int argc, char** argv)
     printf("main: hdhomerun_device_stream_start returns %d\n", error);
     if (error == 1)
     {
-        cb.pids[0] = 0;
-        cb.procs[0] = tmpegts_zero_cb;
-        cb.num_pids = 1;
+        hdhrd->cb.pids[0] = 0;
+        hdhrd->cb.procs[0] = tmpegts_pid0_cb;
+        hdhrd->cb.num_pids = 1;
         while (1)
         {
             bytes = 32 * 1024;
@@ -136,7 +162,7 @@ main(int argc, char** argv)
                 {
                     lbytes = 188;
                 }
-                error = process_mpeg_ts_packet(data, lbytes, &cb, 0);
+                error = process_mpeg_ts_packet(data, lbytes, &(hdhrd->cb), hdhrd);
                 data += lbytes;
                 bytes -= lbytes;
             }
@@ -144,5 +170,6 @@ main(int argc, char** argv)
         }
     }
     hdhomerun_device_destroy(hdhr);
+    free(hdhrd);
     return 0;
 }

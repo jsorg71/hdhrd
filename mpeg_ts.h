@@ -19,10 +19,14 @@
 #ifndef _MPEG_TS_H_
 #define _MPEG_TS_H_
 
+#include "arch.h"
+#include "parse.h"
+
 struct tmpegts;
 
-typedef int (*tmpegts_cb_proc)(const void* data, int data_bytes,
-                               const struct tmpegts* mpegts, void* udata);
+typedef int (*tmpegts_cb_proc)(struct stream* s,
+                               const struct tmpegts* mpegts,
+                               void* udata);
 
 struct tmpegts_cb
 {
@@ -30,6 +34,7 @@ struct tmpegts_cb
     tmpegts_cb_proc procs[32];
     int num_pids;
     int pad0;
+    struct stream* ss[32];
 };
 
 struct tmpegts
@@ -57,6 +62,6 @@ struct tmpegts
 };
 
 int process_mpeg_ts_packet(const void* data, int bytes,
-                           const struct tmpegts_cb* cb, void* udata);
+                           struct tmpegts_cb* cb, void* udata);
 
 #endif

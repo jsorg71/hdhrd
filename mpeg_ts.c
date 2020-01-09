@@ -25,7 +25,7 @@
 /*****************************************************************************/
 int
 process_mpeg_ts_packet(const void* data, int bytes,
-                       const struct tmpegts_cb* cb, void* udata)
+                       struct tmpegts_cb* cb, void* udata)
 {
     unsigned int header;
     struct tmpegts mpegts;
@@ -33,6 +33,7 @@ process_mpeg_ts_packet(const void* data, int bytes,
     const unsigned char* data8_end;
     int cb_bytes;
     int index;
+    struct stream* s;
 
     memset(&mpegts, 0, sizeof(mpegts));
     data8 = (const unsigned char*) data;
@@ -108,18 +109,43 @@ process_mpeg_ts_packet(const void* data, int bytes,
 
     //printf("pid 0x%4.4x\n", mpegts.pid);
     cb_bytes = (int) (data8_end - data8);
-    if (cb != 0)
+    if (cb != NULL)
     {
         index = 0;
         while (index < cb->num_pids)
         {
             if (cb->pids[index] == mpegts.pid)
             {
-                if (cb->procs[index] != 0)
+                s = cb->ss[index];
+                if (mpegts.payload_unit_start_indicator)
                 {
-                    if ((cb->procs[index])(data8, cb_bytes, &mpegts, udata) != 0)
+                    if (s == NULL)
                     {
-                        //return 1;
+                        s = (struct stream*)calloc(1, sizeof(struct stream));
+                        s->size = 1024 * 1024;
+                        s->data = (char*)malloc(s->size);
+                        cb->ss[index] = s;
+                    }
+                    else if (s->end > s->data)
+                    {
+                        if (cb->procs[index] != NULL)
+                        {
+                            s->p = s->data;
+                            if ((cb->procs[index])(s, &mpegts, udata) != 0)
+                            {
+                                //return 1;
+                            }
+                        }
+                    }
+                    s->p = s->data;
+                    s->end = s->data;
+                }
+                if (mpegts.payload_flag)
+                {
+                    if (s != NULL)
+                    {
+                        out_uint8a(s, data8, cb_bytes);
+                        s->end = s->p;
                     }
                 }
             }
