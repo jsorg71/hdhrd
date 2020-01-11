@@ -22,21 +22,6 @@
 #include "arch.h"
 #include "parse.h"
 
-struct tmpegts;
-
-typedef int (*tmpegts_cb_proc)(struct stream* s,
-                               const struct tmpegts* mpegts,
-                               void* udata);
-
-struct tmpegts_cb
-{
-    int pids[32];
-    tmpegts_cb_proc procs[32];
-    int num_pids;
-    int pad0;
-    struct stream* ss[32];
-};
-
 struct tmpegts
 {
     int sync_byte;
@@ -59,6 +44,20 @@ struct tmpegts
     int transport_private_data_flag;
     int adaptation_field_extension_flag;
     unsigned char pcr[6];
+};
+
+typedef int (*tmpegts_cb_proc)(struct stream* s,
+                               const struct tmpegts* mpegts,
+                               void* udata);
+
+struct tmpegts_cb
+{
+    int pids[32];
+    tmpegts_cb_proc procs[32];
+    int num_pids;
+    int pad0;
+    struct stream* ss[32];
+    struct tmpegts mpegtss[32];
 };
 
 int process_mpeg_ts_packet(const void* data, int bytes,

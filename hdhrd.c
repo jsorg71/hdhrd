@@ -82,13 +82,13 @@ tmpegts_pid0_cb(struct stream* s, const struct tmpegts* mpegts, void* udata)
     int table_id;
     int packed_bits;
     int section_length;
-    struct hdhrd_info* hdhrd;
+    //struct hdhrd_info* hdhrd;
     int table_id_extension;
     int program_num;
     int program_map_pid;
 
     printf("tmpegts_pid0_cb:\n");
-    hdhrd = (struct hdhrd_info*)udata;
+    //hdhrd = (struct hdhrd_info*)udata;
 
     in_uint8(s, pointer_field);
     //printf("tmpegts_pid0_cb: pointer_field %d\n", pointer_field);
@@ -107,7 +107,7 @@ tmpegts_pid0_cb(struct stream* s, const struct tmpegts* mpegts, void* udata)
         //printf("tmpegts_pid0_cb: table_id_extension 0x%4.4x\n",
         //       table_id_extension);
         in_uint8s(s, 3);
-        while (s->p + 4 < s->end)
+        while (s_check_rem(s, 8))
         {
             in_uint16_be(s, program_num);
             in_uint16_be(s, program_map_pid);
@@ -165,6 +165,10 @@ main(int argc, char** argv)
                 error = process_mpeg_ts_packet(data, lbytes, &(hdhrd->cb), hdhrd);
                 data += lbytes;
                 bytes -= lbytes;
+            }
+            if (error != 0)
+            {
+                printf("main: exit main loop with error %d\n", error);
             }
             usleep(10 * 1024);
         }

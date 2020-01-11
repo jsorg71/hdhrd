@@ -131,9 +131,10 @@ process_mpeg_ts_packet(const void* data, int bytes,
                         if (cb->procs[index] != NULL)
                         {
                             s->p = s->data;
-                            if ((cb->procs[index])(s, &mpegts, udata) != 0)
+                            if ((cb->procs[index])(s, &(cb->mpegtss[index]),
+                                                   udata) != 0)
                             {
-                                //return 1;
+                                return 10;
                             }
                         }
                     }
@@ -144,11 +145,20 @@ process_mpeg_ts_packet(const void* data, int bytes,
                 {
                     if (s != NULL)
                     {
-                        out_uint8a(s, data8, cb_bytes);
-                        s->end = s->p;
+                        if (!s_check_rem_out(s, cb_bytes))
+                        {
+                            /* not enough space for new data */
+                            return 11;
+                        }
+                        else
+                        {
+                            out_uint8a(s, data8, cb_bytes);
+                            s->end = s->p;
+                        }
                     }
                 }
             }
+            cb->mpegtss[index] = mpegts;
             index++;
         }
     }
