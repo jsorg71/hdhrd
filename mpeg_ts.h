@@ -43,12 +43,21 @@ struct tmpegts
     int splicing_point_flag;
     int transport_private_data_flag;
     int adaptation_field_extension_flag;
-    unsigned char pcr[6];
 };
 
-typedef int (*tmpegts_cb_proc)(struct stream* s,
-                               const struct tmpegts* mpegts,
-                               void* udata);
+#define FLAGS0_PCR_VALID        (1 << 0)
+#define FLAGS0_RANDOM_ACCESS    (1 << 1)
+
+struct pid_info
+{
+    struct stream* s;
+    int flags0;
+    int flags1;
+    int pcr;
+    int pad0;
+};
+
+typedef int (*tmpegts_cb_proc)(struct pid_info* pi, void* udata);
 
 struct tmpegts_cb
 {
@@ -56,8 +65,7 @@ struct tmpegts_cb
     tmpegts_cb_proc procs[32];
     int num_pids;
     int pad0;
-    struct stream* ss[32];
-    struct tmpegts mpegtss[32];
+    struct pid_info pis[32];
 };
 
 int process_mpeg_ts_packet(const void* data, int bytes,
