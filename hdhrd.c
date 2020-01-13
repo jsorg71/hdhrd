@@ -317,7 +317,6 @@ main(int argc, char** argv)
     size_t bytes;
     int error;
     int lbytes;
-    int index;
 
     signal(SIGINT, sig_int);
 
@@ -367,14 +366,7 @@ main(int argc, char** argv)
         }
     }
     hdhomerun_device_destroy(hdhr);
-    for (index = 0; index < 32; index++)
-    {
-        if (hdhrd->cb.pis[index].s != NULL)
-        {
-            free(hdhrd->cb.pis[index].s->data);
-            free(hdhrd->cb.pis[index].s);
-        }
-    }
+    mpeg_ts_cleanup(&(hdhrd->cb));
     free(hdhrd);
     return 0;
 }

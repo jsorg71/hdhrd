@@ -200,3 +200,20 @@ process_mpeg_ts_packet(const void* data, int bytes,
 
     return 0;
 }
+
+/*****************************************************************************/
+int
+mpeg_ts_cleanup(struct tmpegts_cb* cb)
+{
+    int index;
+
+    for (index = 0; index < 32; index++)
+    {
+        if (cb->pis[index].s != NULL)
+        {
+            free(cb->pis[index].s->data);
+            free(cb->pis[index].s);
+        }
+    }
+    return 0;
+}

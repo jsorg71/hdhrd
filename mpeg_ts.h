@@ -68,7 +68,10 @@ struct tmpegts_cb
     struct pid_info pis[32];
 };
 
-int process_mpeg_ts_packet(const void* data, int bytes,
-                           struct tmpegts_cb* cb, void* udata);
+int
+process_mpeg_ts_packet(const void* data, int bytes,
+                       struct tmpegts_cb* cb, void* udata);
+int
+mpeg_ts_cleanup(struct tmpegts_cb* cb);
 
 #endif
