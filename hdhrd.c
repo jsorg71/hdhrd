@@ -205,21 +205,105 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
 static int
 tmpegts_program_cb(struct pid_info* pi, void* udata)
 {
+    int pointer_field;
+    int table_id;
+    int packed_bits;
+    int section_length;
     struct hdhrd_info* hdhrd;
+    struct stream* s;
 
-    hdhrd = (struct hdhrd_info*)udata;
     //printf("tmpegts_program_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
     //hex_dump(pi->s->data, pi->s->end - pi->s->data);
-
-    if (hdhrd->cb.num_pids == 2)
+    hdhrd = (struct hdhrd_info*)udata;
+    s = pi->s;
+    if (!s_check_rem(s, 1))
     {
-        hdhrd->cb.pids[2] = 0x31;
-        hdhrd->cb.procs[2] = tmpegts_video_cb;
-        hdhrd->cb.pids[3] = 0x34;
-        hdhrd->cb.procs[3] = tmpegts_audio_cb;
-        hdhrd->cb.num_pids = 4;
+        return 1;
+    }
+    in_uint8(s, pointer_field);
+    if (pointer_field < 0)
+    {
+        return 2;
+    }
+    if (!s_check_rem(s, pointer_field + 3))
+    {
+        return 3;
+    }
+    in_uint8s(s, pointer_field);
+    in_uint8(s, table_id);
+    if (table_id != 2)
+    {
+        return 4;
+    }
+    in_uint16_be(s, packed_bits);
+    section_length = packed_bits & 0x03FF;
+    if (!s_check_rem(s, section_length))
+    {
+        return 5;
+    }
+    //printf("tmpegts_program_cb: section_length %d\n", section_length);
+    if (hdhrd->cb.num_pids == 4)
+    {
+        hdhrd->cb.pids[4] = 0x31;
+        hdhrd->cb.procs[4] = tmpegts_video_cb;
+        hdhrd->cb.pids[5] = 0x34;
+        hdhrd->cb.procs[5] = tmpegts_audio_cb;
+        hdhrd->cb.num_pids = 6;
     }
 
+    return 0;
+}
+
+/*****************************************************************************/
+static int
+tmpegts_pid2_cb(struct pid_info* pi, void* udata)
+{
+    //printf("tmpegts_pid2_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
+    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    return 0;
+}
+
+/*****************************************************************************/
+static int
+tmpegts_pid1_cb(struct pid_info* pi, void* udata)
+{
+    int pointer_field;
+    int table_id;
+    int packed_bits;
+    int section_length;
+    struct hdhrd_info* hdhrd;
+    struct stream* s;
+
+    //printf("tmpegts_pid1_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
+    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    hdhrd = (struct hdhrd_info*)udata;
+    s = pi->s;
+    if (!s_check_rem(s, 1))
+    {
+        return 1;
+    }
+    in_uint8(s, pointer_field);
+    if (pointer_field < 0)
+    {
+        return 2;
+    }
+    if (!s_check_rem(s, pointer_field + 3))
+    {
+        return 3;
+    }
+    in_uint8s(s, pointer_field);
+    in_uint8(s, table_id);
+    if (table_id != 1)
+    {
+        return 4;
+    }
+    in_uint16_be(s, packed_bits);
+    section_length = packed_bits & 0x03FF;
+    if (!s_check_rem(s, section_length))
+    {
+        return 5;
+    }
+    //printf("tmpegts_pid1_cb: section_length %d\n", section_length);
     return 0;
 }
 
@@ -238,18 +322,15 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     int program_map_pid;
     struct stream* s;
 
+    //printf("tmpegts_pid0_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
+    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
     hdhrd = (struct hdhrd_info*)udata;
-    if (hdhrd->cb.num_pids != 1)
-    {
-        return 0;
-    }
     s = pi->s;
     if (!s_check_rem(s, 1))
     {
         return 1;
     }
     in_uint8(s, pointer_field);
-    //printf("tmpegts_pid0_cb: pointer_field %d\n", pointer_field);
     if (pointer_field < 0)
     {
         return 2;
@@ -260,21 +341,28 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     }
     in_uint8s(s, pointer_field);
     in_uint8(s, table_id);
-    //printf("tmpegts_pid0_cb: table_id %d\n", table_id);
-    in_uint16_be(s, packed_bits);
-    section_length = packed_bits & 0x03FF;
-    //printf("tmpegts_pid0_cb: section_length %d\n", section_length);
-    //hex_dump(s->p, section_length);
-    if (!s_check_rem(s, section_length))
+    if (table_id != 0)
     {
         return 4;
+    }
+    in_uint16_be(s, packed_bits);
+    section_length = packed_bits & 0x03FF;
+    if (!s_check_rem(s, section_length))
+    {
+        return 5;
+    }
+    //printf("tmpegts_pid0_cb: section_length %d\n", section_length);
+    //hex_dump(s->p, section_length);
+    if (hdhrd->cb.num_pids != 3)
+    {
+        return 0;
     }
     s->end = s->p + section_length;
     if (packed_bits & 0x8000) /* section_syntax_indicator */
     {
         if (!s_check_rem(s, 5))
         {
-            return 5;
+            return 6;
         }
         in_uint16_be(s, table_id_extension);
         //printf("tmpegts_pid0_cb: table_id_extension 0x%4.4x\n",
@@ -287,13 +375,13 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
             program_map_pid &= 0x1FFF;
             if (program_map_pid == 0x30)
             {
-                hdhrd->cb.pids[1] = program_map_pid;
-                hdhrd->cb.procs[1] = tmpegts_program_cb;
-                hdhrd->cb.num_pids = 2;
+                hdhrd->cb.pids[3] = program_map_pid;
+                hdhrd->cb.procs[3] = tmpegts_program_cb;
+                hdhrd->cb.num_pids = 4;
             }
-            //printf("tmpegts_pid0_cb: program_num 0x%4.4x "
-            //       "program_map_pid 0x%4.4x\n",
-            //       program_num, program_map_pid);
+            printf("tmpegts_pid0_cb: program_num 0x%4.4x "
+                   "program_map_pid 0x%4.4x\n",
+                   program_num, program_map_pid);
         }
     }
     return 0;
@@ -335,7 +423,11 @@ main(int argc, char** argv)
     {
         hdhrd->cb.pids[0] = 0;
         hdhrd->cb.procs[0] = tmpegts_pid0_cb;
-        hdhrd->cb.num_pids = 1;
+        hdhrd->cb.pids[1] = 1;
+        hdhrd->cb.procs[1] = tmpegts_pid1_cb;
+        hdhrd->cb.pids[2] = 2;
+        hdhrd->cb.procs[2] = tmpegts_pid2_cb;
+        hdhrd->cb.num_pids = 3;
         while (1)
         {
             if (g_term)
@@ -354,13 +446,14 @@ main(int argc, char** argv)
                 {
                     lbytes = 188;
                 }
-                error = process_mpeg_ts_packet(data, lbytes, &(hdhrd->cb), hdhrd);
+                error = process_mpeg_ts_packet(data, lbytes, &(hdhrd->cb),
+                                               hdhrd);
                 data += lbytes;
                 bytes -= lbytes;
             }
             if (error != 0)
             {
-                printf("main: exit main loop with error %d\n", error);
+                printf("main: process_mpeg_ts_packet returned %d\n", error);
             }
             usleep(10 * 1024);
         }

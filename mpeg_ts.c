@@ -105,29 +105,9 @@ process_mpeg_ts_packet(const void* data, int bytes,
             /* 48 bit */
             ppcr = data8;
         }
-        if (mpegts.opcr_flag)
-        {
-            /* 48 bit */
-        }
-        if (mpegts.splicing_point_flag)
-        {
-            //printf("splicing_point_flag set\n");
-            //return 1;
-        }
-        if (mpegts.transport_private_data_flag)
-        {
-            //printf("transport_private_data_flag set\n");
-            //return 1;
-        }
-        if (mpegts.adaptation_field_extension_flag)
-        {
-            //printf("adaptation_field_extension_flag set\n");
-            //return 1;
-        }
         data8 += mpegts.adaptation_field_length;
     }
 
-    //printf("pid 0x%4.4x\n", mpegts.pid);
     cb_bytes = (int) (data8_end - data8);
     if (cb != NULL)
     {
