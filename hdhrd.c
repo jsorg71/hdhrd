@@ -409,6 +409,11 @@ main(int argc, char** argv)
     signal(SIGINT, sig_int);
 
     hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
+    if (hdhrd == NULL)
+    {
+        printf("main: calloc failed\n");
+        return 1;
+    }
     hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
     if (hdhr == NULL)
     {
@@ -428,7 +433,7 @@ main(int argc, char** argv)
         hdhrd->cb.pids[2] = 2;
         hdhrd->cb.procs[2] = tmpegts_pid2_cb;
         hdhrd->cb.num_pids = 3;
-        while (1)
+        for (;;)
         {
             if (g_term)
             {

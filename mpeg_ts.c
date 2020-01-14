@@ -39,6 +39,86 @@ read_pcr(const void* ptr, int* pcr)
 }
 
 /*****************************************************************************/
+static int
+process_pid(struct tmpegts_cb* cb,
+            const unsigned char* data8, int cb_bytes,
+            struct tmpegts* mpegts, void* udata,
+            const unsigned char* ppcr)
+{
+    struct pid_info* pi;
+    struct stream* s;
+    int error;
+    int index;
+    int count;
+
+    count = cb->num_pids;
+    for (index = 0; index < count; index++)
+    {
+        if (cb->pids[index] == mpegts->pid)
+        {
+            pi = cb->pis + index;
+            s = pi->s;
+            if (mpegts->payload_unit_start_indicator)
+            {
+                if (s == NULL)
+                {
+                    s = (struct stream*)calloc(1, sizeof(struct stream));
+                    s->size = 1024 * 1024;
+                    s->data = (char*)malloc(s->size);
+                    pi->s = s;
+                }
+                else if (s->end > s->data)
+                {
+                    if (cb->procs[index] != NULL)
+                    {
+                        s->p = s->data;
+                        error = (cb->procs[index])(pi, udata);
+                        if (error != 0)
+                        {
+                            printf("process_pid: cb for "
+                                   "pid %d returned %d\n", mpegts->pid,
+                                   error);
+                            return 10;
+                        }
+                    }
+                }
+                /* reset pi */
+                s->p = s->data;
+                s->end = s->data;
+                pi->flags0 = 0;
+                pi->flags1 = 0;
+            }
+            if (mpegts->payload_flag)
+            {
+                if (s != NULL)
+                {
+                    if (!s_check_rem_out(s, cb_bytes))
+                    {
+                        /* not enough space for new data */
+                        return 11;
+                    }
+                    else
+                    {
+                        out_uint8a(s, data8, cb_bytes);
+                        s->end = s->p;
+                    }
+                }
+            }
+            if (ppcr != NULL)
+            {
+                pi->flags0 |= FLAGS0_PCR_VALID;
+                read_pcr(ppcr + 1, &(pi->pcr));
+            }
+            if (mpegts->random_access_indicator)
+            {
+                pi->flags0 |= FLAGS0_RANDOM_ACCESS;
+            }
+        }
+    }
+    return 0;
+}
+
+/*****************************************************************************/
 int
 process_mpeg_ts_packet(const void* data, int bytes,
                        struct tmpegts_cb* cb, void* udata)
@@ -46,17 +126,10 @@ process_mpeg_ts_packet(const void* data, int bytes,
     unsigned int header;
     struct tmpegts mpegts;
     const unsigned char* data8;
-    const unsigned char* data8_end;
     const unsigned char* ppcr;
-    struct pid_info* pi;
-    int cb_bytes;
-    int index;
-    int error;
-    struct stream* s;
 
     memset(&mpegts, 0, sizeof(mpegts));
     data8 = (const unsigned char*) data;
-    data8_end = data8 + bytes;
     header = (data8[0] << 24) | (data8[1] << 16) | (data8[2] << 8) | data8[3];
     data8 += 4;
     mpegts.sync_byte                    = (header & 0xff000000) >> 24;
@@ -96,10 +169,6 @@ process_mpeg_ts_packet(const void* data, int bytes,
         mpegts.splicing_point_flag                  = (header & 0x04) >> 2;
         mpegts.transport_private_data_flag          = (header & 0x02) >> 1;
         mpegts.adaptation_field_extension_flag      = (header & 0x01) >> 0;
-        if (mpegts.random_access_indicator)
-        {
-            //printf("random_access_indicator set\n");
-        }
         if (mpegts.pcr_flag)
         {
             /* 48 bit */
@@ -107,78 +176,7 @@ process_mpeg_ts_packet(const void* data, int bytes,
         }
         data8 += mpegts.adaptation_field_length;
     }
-
-    cb_bytes = (int) (data8_end - data8);
-    if (cb != NULL)
-    {
-        index = 0;
-        while (index < cb->num_pids)
-        {
-            if (cb->pids[index] == mpegts.pid)
-            {
-                pi = cb->pis + index;
-                s = pi->s;
-                if (mpegts.payload_unit_start_indicator)
-                {
-                    if (s == NULL)
-                    {
-                        s = (struct stream*)calloc(1, sizeof(struct stream));
-                        s->size = 1024 * 1024;
-                        s->data = (char*)malloc(s->size);
-                        pi->s = s;
-                    }
-                    else if (s->end > s->data)
-                    {
-                        if (cb->procs[index] != NULL)
-                        {
-                            s->p = s->data;
-                            error = (cb->procs[index])(pi, udata);
-                            if (error != 0)
-                            {
-                                printf("process_mpeg_ts_packet: cb for "
-                                       "pid %d returned %d\n", mpegts.pid,
-                                       error);
-                                return 10;
-                            }
-                        }
-                    }
-                    /* reset pi */
-                    s->p = s->data;
-                    s->end = s->data;
-                    pi->flags0 = 0;
-                    pi->flags1 = 0;
-                }
-                if (mpegts.payload_flag)
-                {
-                    if (s != NULL)
-                    {
-                        if (!s_check_rem_out(s, cb_bytes))
-                        {
-                            /* not enough space for new data */
-                            return 11;
-                        }
-                        else
-                        {
-                            out_uint8a(s, data8, cb_bytes);
-                            s->end = s->p;
-                        }
-                    }
-                }
-                if (ppcr != NULL)
-                {
-                    pi->flags0 |= FLAGS0_PCR_VALID;
-                    read_pcr(ppcr + 1, &(pi->pcr));
-                }
-                if (mpegts.random_access_indicator)
-                {
-                    pi->flags0 |= FLAGS0_RANDOM_ACCESS;
-                }
-            }
-            index++;
-        }
-    }
-
-    return 0;
+    return process_pid(cb, data8, bytes, &mpegts, udata, ppcr);
 }
 
 /*****************************************************************************/
