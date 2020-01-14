@@ -42,8 +42,7 @@ read_pcr(const void* ptr, int* pcr)
 static int
 process_pid(struct tmpegts_cb* cb,
             const unsigned char* data8, int cb_bytes,
-            struct tmpegts* mpegts, void* udata,
-            const unsigned char* ppcr)
+            struct tmpegts* mpegts, void* udata)
 {
     struct pid_info* pi;
     struct stream* s;
@@ -104,10 +103,10 @@ process_pid(struct tmpegts_cb* cb,
                     }
                 }
             }
-            if (ppcr != NULL)
+            if (mpegts->ppcr != NULL)
             {
                 pi->flags0 |= FLAGS0_PCR_VALID;
-                read_pcr(ppcr + 1, &(pi->pcr));
+                read_pcr(mpegts->ppcr + 1, &(pi->pcr));
             }
             if (mpegts->random_access_indicator)
             {
@@ -126,10 +125,12 @@ process_mpeg_ts_packet(const void* data, int bytes,
     unsigned int header;
     struct tmpegts mpegts;
     const unsigned char* data8;
-    const unsigned char* ppcr;
+    const unsigned char* data8_end;
+    int cb_bytes;
 
     memset(&mpegts, 0, sizeof(mpegts));
     data8 = (const unsigned char*) data;
+    data8_end = data8 + bytes;
     header = (data8[0] << 24) | (data8[1] << 16) | (data8[2] << 8) | data8[3];
     data8 += 4;
     mpegts.sync_byte                    = (header & 0xff000000) >> 24;
@@ -155,7 +156,6 @@ process_mpeg_ts_packet(const void* data, int bytes,
         /* not supported */
         return 3;
     }
-    ppcr = NULL;
     if (mpegts.adaptation_field_flag && (data8[0] > 0))
     {
         mpegts.adaptation_field_length = data8[0];
@@ -172,11 +172,12 @@ process_mpeg_ts_packet(const void* data, int bytes,
         if (mpegts.pcr_flag)
         {
             /* 48 bit */
-            ppcr = data8;
+            mpegts.ppcr = data8;
         }
         data8 += mpegts.adaptation_field_length;
     }
-    return process_pid(cb, data8, bytes, &mpegts, udata, ppcr);
+    cb_bytes = (int) (data8_end - data8);
+    return process_pid(cb, data8, cb_bytes, &mpegts, udata);
 }
 
 /*****************************************************************************/

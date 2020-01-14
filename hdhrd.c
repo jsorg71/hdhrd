@@ -202,6 +202,34 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
 }
 
 /*****************************************************************************/
+/* channel 42
+0000 00 02 b0 1d 00 03 c1 00 00 e0 31 f0 00 02 e0 31 ..........1....1
+0010 f0 00 81 e0 34 f0 06 0a 04 65 6e 67 00 21 20 ba ....4....eng.! .
+0020 44 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff D...............
+0030 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0040 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0050 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0060 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0070 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0080 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0090 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+00a0 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+00b0 ff ff ff ff ff ff ff ff                         ........
+*/
+/* channel 44
+0000 00 02 b0 51 00 03 cd 00 00 e0 31 f0 00 02 e0 31 ...Q......1....1
+0010 f0 05 02 03 3a 44 5f 81 e0 34 f0 18 81 0a 06 3c ....:D_..4.....<
+0020 05 ff 2f 00 bf 65 6e 67 05 04 41 43 2d 33 0a 04 ../..eng..AC-3..
+0030 65 6e 67 00 81 e0 35 f0 18 81 0a 06 28 05 ff 2f eng...5.....(../
+0040 00 bf 73 70 61 05 04 41 43 2d 33 0a 04 73 70 61 ..spa..AC-3..spa
+0050 00 f7 bc 5c 4c ff ff ff ff ff ff ff ff ff ff ff ...\L...........
+0060 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0070 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0080 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+0090 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+00a0 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
+00b0 ff ff ff ff ff ff ff ff                         ........
+*/ 
 static int
 tmpegts_program_cb(struct pid_info* pi, void* udata)
 {
@@ -212,8 +240,8 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     struct hdhrd_info* hdhrd;
     struct stream* s;
 
-    //printf("tmpegts_program_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    printf("tmpegts_program_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
+    hex_dump(pi->s->data, pi->s->end - pi->s->data);
     hdhrd = (struct hdhrd_info*)udata;
     s = pi->s;
     if (!s_check_rem(s, 1))
@@ -231,6 +259,7 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     }
     in_uint8s(s, pointer_field);
     in_uint8(s, table_id);
+    printf("tmpegts_program_cb: table_id %d\n", table_id);
     if (table_id != 2)
     {
         return 4;
@@ -322,8 +351,8 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     int program_map_pid;
     struct stream* s;
 
-    //printf("tmpegts_pid0_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    printf("tmpegts_pid0_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
+    hex_dump(pi->s->data, pi->s->end - pi->s->data);
     hdhrd = (struct hdhrd_info*)udata;
     s = pi->s;
     if (!s_check_rem(s, 1))
@@ -341,6 +370,7 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     }
     in_uint8s(s, pointer_field);
     in_uint8(s, table_id);
+    printf("tmpegts_pid0_cb: table_id %d\n", table_id);
     if (table_id != 0)
     {
         return 4;

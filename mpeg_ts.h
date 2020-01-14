@@ -43,6 +43,8 @@ struct tmpegts
     int splicing_point_flag;
     int transport_private_data_flag;
     int adaptation_field_extension_flag;
+
+    const unsigned char* ppcr;
 };
 
 #define FLAGS0_PCR_VALID        (1 << 0)
