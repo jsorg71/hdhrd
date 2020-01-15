@@ -1,7 +1,7 @@
 
 OBJS=hdhrd.o mpeg_ts.o
 
-CFLAGS=-O2 -g -Wall -I/usr/include/libhdhomerun
+CFLAGS=-O2 -g -Wall -Wextra -I/usr/include/libhdhomerun
 
 LDFLAGS=
 

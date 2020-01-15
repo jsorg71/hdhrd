@@ -192,6 +192,7 @@ mpeg_ts_cleanup(struct tmpegts_cb* cb)
         {
             free(cb->pis[index].s->data);
             free(cb->pis[index].s);
+            cb->pis[index].s = NULL;
         }
     }
     return 0;

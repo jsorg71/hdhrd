@@ -39,7 +39,7 @@ struct hdhrd_info
 };
 
 /*****************************************************************************/
-static int
+int
 hex_dump(const void* data, int bytes)
 {
     const unsigned char *line;
@@ -156,6 +156,8 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     int dts;
     struct stream* s;
 
+    (void)udata;
+
     //printf("tmpegts_video_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
     //if (pi->flags0 & 1)
     //{
@@ -183,6 +185,8 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     int dts;
     struct stream* s;
 
+    (void)udata;
+
     //printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
     //if (pi->flags0 & 1)
     //{
@@ -202,34 +206,6 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
 }
 
 /*****************************************************************************/
-/* channel 42
-0000 00 02 b0 1d 00 03 c1 00 00 e0 31 f0 00 02 e0 31 ..........1....1
-0010 f0 00 81 e0 34 f0 06 0a 04 65 6e 67 00 21 20 ba ....4....eng.! .
-0020 44 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff D...............
-0030 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0040 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0050 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0060 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0070 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0080 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0090 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-00a0 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-00b0 ff ff ff ff ff ff ff ff                         ........
-*/
-/* channel 44
-0000 00 02 b0 51 00 03 cd 00 00 e0 31 f0 00 02 e0 31 ...Q......1....1
-0010 f0 05 02 03 3a 44 5f 81 e0 34 f0 18 81 0a 06 3c ....:D_..4.....<
-0020 05 ff 2f 00 bf 65 6e 67 05 04 41 43 2d 33 0a 04 ../..eng..AC-3..
-0030 65 6e 67 00 81 e0 35 f0 18 81 0a 06 28 05 ff 2f eng...5.....(../
-0040 00 bf 73 70 61 05 04 41 43 2d 33 0a 04 73 70 61 ..spa..AC-3..spa
-0050 00 f7 bc 5c 4c ff ff ff ff ff ff ff ff ff ff ff ...\L...........
-0060 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0070 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0080 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-0090 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-00a0 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ................
-00b0 ff ff ff ff ff ff ff ff                         ........
-*/ 
 static int
 tmpegts_program_cb(struct pid_info* pi, void* udata)
 {
@@ -237,11 +213,17 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     int table_id;
     int packed_bits;
     int section_length;
+    int program_info_length;
+    int stream_type;
+    int elementary_pid;
+    int es_info_length;
+    int video_pid;
+    int audio_pid;
     struct hdhrd_info* hdhrd;
     struct stream* s;
 
-    printf("tmpegts_program_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    //printf("tmpegts_program_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
+    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
     hdhrd = (struct hdhrd_info*)udata;
     s = pi->s;
     if (!s_check_rem(s, 1))
@@ -259,7 +241,7 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     }
     in_uint8s(s, pointer_field);
     in_uint8(s, table_id);
-    printf("tmpegts_program_cb: table_id %d\n", table_id);
+    //printf("tmpegts_program_cb: table_id %d\n", table_id);
     if (table_id != 2)
     {
         return 4;
@@ -271,68 +253,60 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
         return 5;
     }
     //printf("tmpegts_program_cb: section_length %d\n", section_length);
-    if (hdhrd->cb.num_pids == 4)
+    if (hdhrd->cb.num_pids != 2)
     {
-        hdhrd->cb.pids[4] = 0x31;
-        hdhrd->cb.procs[4] = tmpegts_video_cb;
-        hdhrd->cb.pids[5] = 0x34;
-        hdhrd->cb.procs[5] = tmpegts_audio_cb;
-        hdhrd->cb.num_pids = 6;
+        return 0;
     }
 
-    return 0;
-}
-
-/*****************************************************************************/
-static int
-tmpegts_pid2_cb(struct pid_info* pi, void* udata)
-{
-    //printf("tmpegts_pid2_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
-    return 0;
-}
-
-/*****************************************************************************/
-static int
-tmpegts_pid1_cb(struct pid_info* pi, void* udata)
-{
-    int pointer_field;
-    int table_id;
-    int packed_bits;
-    int section_length;
-    struct hdhrd_info* hdhrd;
-    struct stream* s;
-
-    //printf("tmpegts_pid1_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
-    hdhrd = (struct hdhrd_info*)udata;
-    s = pi->s;
-    if (!s_check_rem(s, 1))
+    s->end = s->p + section_length;
+    if (packed_bits & 0x8000) /* section_syntax_indicator */
     {
-        return 1;
+        if (!s_check_rem(s, 9))
+        {
+            return 6;
+        }
+        in_uint8s(s, 7);
+        in_uint16_be(s, packed_bits);
+        program_info_length = packed_bits & 0x03FF;
+        if (!s_check_rem(s, program_info_length))
+        {
+            return 7;
+        }
+        in_uint8s(s, program_info_length);
+        video_pid = 0;
+        audio_pid = 0;
+        while (s_check_rem(s, 9)) /* last 4 bytes is crc */
+        {
+            in_uint8(s, stream_type);
+            in_uint16_be(s, packed_bits);
+            elementary_pid = packed_bits & 0x1FFF;
+            in_uint16_be(s, packed_bits);
+            es_info_length = packed_bits & 0x03FF;
+            printf("tmpegts_program_cb: found stream_type 0x%4.4x "
+                   "elementary_pid 0x%4.4x es_info_length %d\n",
+                   stream_type, elementary_pid, es_info_length);
+            //hex_dump(pi->s->p, es_info_length); 
+            in_uint8s(s, es_info_length);
+            if ((stream_type == 0x02) && (video_pid == 0)) /* mpeg2 */
+            {
+                video_pid = elementary_pid;
+            }
+            if ((stream_type == 0x81) && (audio_pid == 0)) /* ac3 */
+            {
+                audio_pid = elementary_pid;
+            }
+        }
+        if ((video_pid != 0) && (audio_pid != 0))
+        {
+            printf("tmpegts_program_cb: adding video pid 0x%4.4x\n", video_pid);
+            hdhrd->cb.pids[2] = video_pid;
+            hdhrd->cb.procs[2] = tmpegts_video_cb;
+            printf("tmpegts_program_cb: adding audio pid 0x%4.4x\n", audio_pid);
+            hdhrd->cb.pids[3] = audio_pid;
+            hdhrd->cb.procs[3] = tmpegts_audio_cb;
+            hdhrd->cb.num_pids = 4;
+        }
     }
-    in_uint8(s, pointer_field);
-    if (pointer_field < 0)
-    {
-        return 2;
-    }
-    if (!s_check_rem(s, pointer_field + 3))
-    {
-        return 3;
-    }
-    in_uint8s(s, pointer_field);
-    in_uint8(s, table_id);
-    if (table_id != 1)
-    {
-        return 4;
-    }
-    in_uint16_be(s, packed_bits);
-    section_length = packed_bits & 0x03FF;
-    if (!s_check_rem(s, section_length))
-    {
-        return 5;
-    }
-    //printf("tmpegts_pid1_cb: section_length %d\n", section_length);
     return 0;
 }
 
@@ -346,13 +320,13 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     int packed_bits;
     int section_length;
     struct hdhrd_info* hdhrd;
-    int table_id_extension;
     int program_num;
     int program_map_pid;
+    int pmt_pid;
     struct stream* s;
 
-    printf("tmpegts_pid0_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    //printf("tmpegts_pid0_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
+    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
     hdhrd = (struct hdhrd_info*)udata;
     s = pi->s;
     if (!s_check_rem(s, 1))
@@ -370,7 +344,7 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     }
     in_uint8s(s, pointer_field);
     in_uint8(s, table_id);
-    printf("tmpegts_pid0_cb: table_id %d\n", table_id);
+    //printf("tmpegts_pid0_cb: table_id %d\n", table_id);
     if (table_id != 0)
     {
         return 4;
@@ -383,7 +357,7 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     }
     //printf("tmpegts_pid0_cb: section_length %d\n", section_length);
     //hex_dump(s->p, section_length);
-    if (hdhrd->cb.num_pids != 3)
+    if (hdhrd->cb.num_pids != 1)
     {
         return 0;
     }
@@ -394,24 +368,27 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
         {
             return 6;
         }
-        in_uint16_be(s, table_id_extension);
-        //printf("tmpegts_pid0_cb: table_id_extension 0x%4.4x\n",
-        //       table_id_extension);
-        in_uint8s(s, 3);
+        in_uint8s(s, 5);
+        pmt_pid = 0;
         while (s_check_rem(s, 8)) /* last 4 bytes is crc */
         {
             in_uint16_be(s, program_num);
             in_uint16_be(s, program_map_pid);
             program_map_pid &= 0x1FFF;
-            if (program_map_pid == 0x30)
+            if ((program_map_pid != 0) && (pmt_pid == 0))
             {
-                hdhrd->cb.pids[3] = program_map_pid;
-                hdhrd->cb.procs[3] = tmpegts_program_cb;
-                hdhrd->cb.num_pids = 4;
+                pmt_pid = program_map_pid;
             }
-            printf("tmpegts_pid0_cb: program_num 0x%4.4x "
+            printf("tmpegts_pid0_cb: found program_num 0x%4.4x "
                    "program_map_pid 0x%4.4x\n",
                    program_num, program_map_pid);
+        }
+        if (pmt_pid != 0)
+        {
+            printf("tmpegts_pid0_cb: adding program pid 0x%4.4x\n", pmt_pid);
+            hdhrd->cb.pids[1] = pmt_pid;
+            hdhrd->cb.procs[1] = tmpegts_program_cb;
+            hdhrd->cb.num_pids = 2;
         }
     }
     return 0;
@@ -421,6 +398,7 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
 static void
 sig_int(int sig)
 {
+    (void)sig;
     g_term = 1;
 }
 
@@ -435,6 +413,9 @@ main(int argc, char** argv)
     size_t bytes;
     int error;
     int lbytes;
+
+    (void)argc;
+    (void)argv;
 
     signal(SIGINT, sig_int);
 
@@ -456,13 +437,10 @@ main(int argc, char** argv)
     printf("main: hdhomerun_device_stream_start returns %d\n", error);
     if (error == 1)
     {
+        printf("main: adding main pid 0x%4.4x\n", 0);
         hdhrd->cb.pids[0] = 0;
         hdhrd->cb.procs[0] = tmpegts_pid0_cb;
-        hdhrd->cb.pids[1] = 1;
-        hdhrd->cb.procs[1] = tmpegts_pid1_cb;
-        hdhrd->cb.pids[2] = 2;
-        hdhrd->cb.procs[2] = tmpegts_pid2_cb;
-        hdhrd->cb.num_pids = 3;
+        hdhrd->cb.num_pids = 1;
         for (;;)
         {
             if (g_term)
