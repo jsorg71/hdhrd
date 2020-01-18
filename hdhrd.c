@@ -28,6 +28,7 @@
 #include "arch.h"
 #include "parse.h"
 #include "mpeg_ts.h"
+#include "hdhrd_ac3.h"
 
 static volatile int g_term = 0;
 
@@ -43,6 +44,7 @@ struct hdhrd_info
     struct pid0_info pid0;
     int listener;
     int pad0;
+    void* ac3;
 };
 
 #define HDHRD_UDS "/tmp/hdhrd"
@@ -192,11 +194,17 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     int error;
     int pts;
     int dts;
+    int cdata_bytes;
+    int cdata_bytes_processed;
+    int decoded;
+    int channels;
+    int bytes;
     struct stream* s;
+    struct hdhrd_info* hdhrd;
 
-    (void)udata;
+    hdhrd = (struct hdhrd_info*)udata;
 
-    //printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
+    printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
     //if (pi->flags0 & 1)
     //{
     //    printf("tmpegts_audio_cb: pcr 0x%10.10u\n", pi->pcr);
@@ -211,6 +219,27 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     }
     //printf("tmpegts_audio_cb: error %d pts %10.10u dts %10.10u\n", error, pts, dts);
     //hex_dump(pi->s->p, 32);
+
+    while (s->p < s->end)
+    {
+        cdata_bytes = (int)(s->end - s->p);
+        error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
+                                 &cdata_bytes_processed, &decoded);
+        printf("  tmpegts_audio_cb: error %d cdata_bytes %d "
+               "cdata_bytes_processed %d decoded %d\n",
+               error, cdata_bytes, cdata_bytes_processed, decoded);
+        if (error != 0)
+        {
+            printf("tmpegts_audio_cb: hdhrd_ac3_decode failed\n");
+            break;
+        }
+        s->p += cdata_bytes_processed;
+        if (decoded)
+        {
+            hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels, &bytes);
+            printf("    tmpegts_audio_cb: channels %d bytes %d\n", channels, bytes);
+        }
+    }
     return 0;
 }
 
@@ -477,6 +506,10 @@ main(int argc, char** argv)
         hdhrd->cb.pids[0] = 0;
         hdhrd->cb.procs[0] = tmpegts_pid0_cb;
         hdhrd->cb.num_pids = 1;
+        if (hdhrd_ac3_create(&(hdhrd->ac3)) != 0)
+        {
+            printf("main: hdhrd_ac3_create failed\n");
+        }
         for (;;)
         {
             if (g_term)
@@ -524,6 +557,7 @@ main(int argc, char** argv)
     hdhomerun_device_destroy(hdhr);
     mpeg_ts_cleanup(&(hdhrd->cb));
     close(hdhrd->listener);
+    hdhrd_ac3_delete(hdhrd->ac3);
     free(hdhrd);
     unlink(HDHRD_UDS);
     return 0;
