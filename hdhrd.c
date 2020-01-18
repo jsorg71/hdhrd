@@ -19,6 +19,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/un.h>
 
 #include <hdhomerun.h>
 
@@ -30,13 +33,19 @@ static volatile int g_term = 0;
 
 struct pid0_info
 {
+    int pad0;
+    int pad1;
 };
 
 struct hdhrd_info
 {
     struct tmpegts_cb cb;
     struct pid0_info pid0;
+    int listener;
+    int pad0;
 };
+
+#define HDHRD_UDS "/tmp/hdhrd"
 
 /*****************************************************************************/
 int
@@ -413,16 +422,43 @@ main(int argc, char** argv)
     size_t bytes;
     int error;
     int lbytes;
+    int millis;
+    struct sockaddr_un s;
+    fd_set rfds;
+    struct timeval time;
 
     (void)argc;
     (void)argv;
-
-    signal(SIGINT, sig_int);
 
     hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
     if (hdhrd == NULL)
     {
         printf("main: calloc failed\n");
+        return 1;
+    }
+    signal(SIGINT, sig_int);
+    unlink(HDHRD_UDS);
+    hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
+    if (hdhrd->listener == -1)
+    {
+        printf("main: socket failed\n");
+        return 1;
+    }
+    memset(&s, 0, sizeof(struct sockaddr_un));
+    s.sun_family = AF_UNIX;
+    strncpy(s.sun_path, HDHRD_UDS, sizeof(s.sun_path));
+    s.sun_path[sizeof(s.sun_path) - 1] = 0;
+    bytes = sizeof(struct sockaddr_un);
+    error = bind(hdhrd->listener, (struct sockaddr*)&s, bytes);
+    if (error != 0)
+    {
+        printf("main: bind error\n");
+        return 1;
+    }
+    error = listen(hdhrd->listener, 2);
+    if (error != 0)
+    {
+        printf("main: listen error\n");
         return 1;
     }
     hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
@@ -468,11 +504,27 @@ main(int argc, char** argv)
             {
                 printf("main: process_mpeg_ts_packet returned %d\n", error);
             }
-            usleep(10 * 1024);
+
+            FD_ZERO(&rfds);
+            FD_SET(hdhrd->listener, &rfds);
+            millis = 15;
+            time.tv_sec = millis / 1000;
+            time.tv_usec = (millis * 1000) % 1000000;
+            error = select(hdhrd->listener + 1, &rfds, 0, 0, &time);
+            if (error > 0)
+            {
+                if (FD_ISSET(hdhrd->listener, &rfds))
+                {
+                    printf("got connection\n");
+                }
+            }
+
         }
     }
     hdhomerun_device_destroy(hdhr);
     mpeg_ts_cleanup(&(hdhrd->cb));
+    close(hdhrd->listener);
     free(hdhrd);
+    unlink(HDHRD_UDS);
     return 0;
 }

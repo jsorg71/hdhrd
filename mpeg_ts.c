@@ -62,8 +62,17 @@ process_pid(struct tmpegts_cb* cb,
                 if (s == NULL)
                 {
                     s = (struct stream*)calloc(1, sizeof(struct stream));
+                    if (s == NULL)
+                    {
+                        return 4;
+                    }
                     s->size = 1024 * 1024;
                     s->data = (char*)malloc(s->size);
+                    if (s->data == NULL)
+                    {
+                        free(s);
+                        return 5;
+                    }
                     pi->s = s;
                 }
                 else if (s->end > s->data)
@@ -94,7 +103,7 @@ process_pid(struct tmpegts_cb* cb,
                     if (!s_check_rem_out(s, cb_bytes))
                     {
                         /* not enough space for new data */
-                        return 11;
+                        return 6;
                     }
                     else
                     {
