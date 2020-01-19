@@ -21,6 +21,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
 #include <sys/un.h>
 
 #include <hdhomerun.h>
@@ -32,22 +33,32 @@
 
 static volatile int g_term = 0;
 
-struct pid0_info
-{
-    int pad0;
-    int pad1;
-};
-
 struct hdhrd_info
 {
     struct tmpegts_cb cb;
-    struct pid0_info pid0;
     int listener;
     int pad0;
     void* ac3;
 };
 
 #define HDHRD_UDS "/tmp/hdhrd"
+
+/*****************************************************************************/
+int
+get_mstime(unsigned int* mstime)
+{
+    struct timespec ts;
+    unsigned int the_tick;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+    {
+        return 1;
+    }
+    the_tick = ts.tv_nsec / 1000000;
+    the_tick += ts.tv_sec * 1000;
+    *mstime = the_tick;
+    return 0;
+}
 
 /*****************************************************************************/
 int
@@ -204,7 +215,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
 
     hdhrd = (struct hdhrd_info*)udata;
 
-    printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
+    //printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
     //if (pi->flags0 & 1)
     //{
     //    printf("tmpegts_audio_cb: pcr 0x%10.10u\n", pi->pcr);
@@ -225,9 +236,9 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
         cdata_bytes = (int)(s->end - s->p);
         error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
                                  &cdata_bytes_processed, &decoded);
-        printf("  tmpegts_audio_cb: error %d cdata_bytes %d "
-               "cdata_bytes_processed %d decoded %d\n",
-               error, cdata_bytes, cdata_bytes_processed, decoded);
+        //printf("tmpegts_audio_cb: error %d cdata_bytes %d "
+        //       "cdata_bytes_processed %d decoded %d\n",
+        //       error, cdata_bytes, cdata_bytes_processed, decoded);
         if (error != 0)
         {
             printf("tmpegts_audio_cb: hdhrd_ac3_decode failed\n");
@@ -237,7 +248,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
         if (decoded)
         {
             hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels, &bytes);
-            printf("    tmpegts_audio_cb: channels %d bytes %d\n", channels, bytes);
+            //printf("tmpegts_audio_cb: channels %d bytes %d\n", channels, bytes);
         }
     }
     return 0;
@@ -433,6 +444,18 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
 }
 
 /*****************************************************************************/
+static int
+hdhrd_get_fds(struct hdhrd_info* hdhrd, int* max_fd,
+              fd_set* rfds, fd_set* wfds)
+{
+    (void)hdhrd;
+    (void)max_fd;
+    (void)rfds;
+    (void)wfds;
+    return 0;
+}
+
+/*****************************************************************************/
 static void
 sig_int(int sig)
 {
@@ -441,6 +464,7 @@ sig_int(int sig)
 }
 
 /*****************************************************************************/
+/* FD_SETSIZE */
 int
 main(int argc, char** argv)
 {
@@ -452,8 +476,13 @@ main(int argc, char** argv)
     int error;
     int lbytes;
     int millis;
+    int max_fd;
+    unsigned int start_time;
+    unsigned int now;
+    int diff_time;
     struct sockaddr_un s;
     fd_set rfds;
+    fd_set wfds;
     struct timeval time;
 
     (void)argc;
@@ -490,6 +519,7 @@ main(int argc, char** argv)
         printf("main: listen error\n");
         return 1;
     }
+    printf("main: listen ok socket %d\n", hdhrd->listener);
     hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
     if (hdhr == NULL)
     {
@@ -517,12 +547,21 @@ main(int argc, char** argv)
                 printf("main: g_term set\n");
                 break;
             }
+            if (get_mstime(&start_time) != 0)
+            {
+                printf("main: get_mstime failed\n");
+                break;
+            }
             bytes = 32 * 1024;
             data = hdhomerun_device_stream_recv(hdhr, bytes, &bytes);
             //printf("main: data %p bytes %ld\n", data, bytes);
             error = 0;
             while ((error == 0) && (bytes > 3))
             {
+                if (g_term)
+                {
+                    break;
+                }
                 lbytes = bytes;
                 if (lbytes > 188)
                 {
@@ -537,21 +576,44 @@ main(int argc, char** argv)
             {
                 printf("main: process_mpeg_ts_packet returned %d\n", error);
             }
-
-            FD_ZERO(&rfds);
-            FD_SET(hdhrd->listener, &rfds);
-            millis = 15;
-            time.tv_sec = millis / 1000;
-            time.tv_usec = (millis * 1000) % 1000000;
-            error = select(hdhrd->listener + 1, &rfds, 0, 0, &time);
-            if (error > 0)
+            for (;;)
             {
-                if (FD_ISSET(hdhrd->listener, &rfds))
+                if (g_term)
                 {
-                    printf("got connection\n");
+                    break;
+                }
+                if (get_mstime(&now) != 0)
+                {
+                    printf("main: get_mstime failed\n");
+                    break;
+                }
+                diff_time = now - start_time;
+                if (diff_time >= 15)
+                {
+                    break;
+                }
+                max_fd = hdhrd->listener;
+                FD_ZERO(&rfds);
+                FD_ZERO(&wfds);
+                FD_SET(hdhrd->listener, &rfds);
+                hdhrd_get_fds(hdhrd, &max_fd, &rfds, &wfds);
+                millis = 15 - diff_time;
+                if (millis < 1)
+                {
+                    millis = 1;
+                }
+                //printf("millis %d\n", millis);
+                time.tv_sec = millis / 1000;
+                time.tv_usec = (millis * 1000) % 1000000;
+                error = select(max_fd + 1, &rfds, &wfds, 0, &time);
+                if (error > 0)
+                {
+                    if (FD_ISSET(hdhrd->listener, &rfds))
+                    {
+                        printf("got connection\n");
+                    }
                 }
             }
-
         }
     }
     hdhomerun_device_destroy(hdhr);

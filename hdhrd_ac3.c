@@ -52,20 +52,20 @@ hdhrd_ac3_create(void** obj)
     self = (struct mycodec_audio*)calloc(sizeof(struct mycodec_audio), 1);
     if (self == NULL)
     {
-        return 3;
+        return 2;
     }
     self->state = a52_init(0);
     if (self->state == NULL)
     {
         free(self);
-        return 4;
+        return 3;
     }
     self->samples = a52_samples(self->state);
     if (self->samples == NULL)
     {
         a52_free(self->state);
         free(self);
-        return 5;
+        return 4;
     }
     *obj = self;
     return 0;
@@ -148,7 +148,8 @@ hdhrd_ac3_decode(void* obj, void* cdata, int cdata_bytes,
             flags = 0;
             sample_rate = 0;
             bit_rate = 0;
-            len = a52_syncinfo((uint8_t*)cdata, &flags, &sample_rate, &bit_rate);
+            len = a52_syncinfo((uint8_t*)cdata, &flags,
+                               &sample_rate, &bit_rate);
             if (len == 0)
             {
                 return 1;
@@ -233,9 +234,11 @@ hdhrd_ac3_get_frame_data(void* obj, void* data, int data_bytes)
     int index;
     short* out_samples;
 
-    (void)data_bytes;
-
     self = (struct mycodec_audio*)obj;
+    if (data_bytes < 6 * 256 * self->channels * 2)
+    {
+        return 1;
+    }
     out_samples = (short*)data;
     for (index = 0; index < 6; index++)
     {

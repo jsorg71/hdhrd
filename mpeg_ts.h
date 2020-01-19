@@ -63,10 +63,10 @@ typedef int (*tmpegts_cb_proc)(struct pid_info* pi, void* udata);
 
 struct tmpegts_cb
 {
-    int pids[32];
-    tmpegts_cb_proc procs[32];
     int num_pids;
     int pad0;
+    int pids[32];
+    tmpegts_cb_proc procs[32];
     struct pid_info pis[32];
 };
 
