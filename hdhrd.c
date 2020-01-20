@@ -29,19 +29,11 @@
 #include "arch.h"
 #include "parse.h"
 #include "mpeg_ts.h"
+#include "hdhrd.h"
 #include "hdhrd_ac3.h"
+#include "hdhrd_peer.h"
 
 static volatile int g_term = 0;
-
-struct hdhrd_info
-{
-    struct tmpegts_cb cb;
-    int listener;
-    int pad0;
-    void* ac3;
-};
-
-#define HDHRD_UDS "/tmp/hdhrd"
 
 /*****************************************************************************/
 int
@@ -444,18 +436,6 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
 }
 
 /*****************************************************************************/
-static int
-hdhrd_get_fds(struct hdhrd_info* hdhrd, int* max_fd,
-              fd_set* rfds, fd_set* wfds)
-{
-    (void)hdhrd;
-    (void)max_fd;
-    (void)rfds;
-    (void)wfds;
-    return 0;
-}
-
-/*****************************************************************************/
 static void
 sig_int(int sig)
 {
@@ -481,9 +461,12 @@ main(int argc, char** argv)
     unsigned int now;
     int diff_time;
     struct sockaddr_un s;
+    socklen_t sock_len;
     fd_set rfds;
     fd_set wfds;
     struct timeval time;
+    int sck;
+    char hdhrd_uds[256];
 
     (void)argc;
     (void)argv;
@@ -495,7 +478,8 @@ main(int argc, char** argv)
         return 1;
     }
     signal(SIGINT, sig_int);
-    unlink(HDHRD_UDS);
+    snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
+    unlink(hdhrd_uds);
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
     if (hdhrd->listener == -1)
     {
@@ -504,10 +488,10 @@ main(int argc, char** argv)
     }
     memset(&s, 0, sizeof(struct sockaddr_un));
     s.sun_family = AF_UNIX;
-    strncpy(s.sun_path, HDHRD_UDS, sizeof(s.sun_path));
+    strncpy(s.sun_path, hdhrd_uds, sizeof(s.sun_path));
     s.sun_path[sizeof(s.sun_path) - 1] = 0;
-    bytes = sizeof(struct sockaddr_un);
-    error = bind(hdhrd->listener, (struct sockaddr*)&s, bytes);
+    sock_len = sizeof(struct sockaddr_un);
+    error = bind(hdhrd->listener, (struct sockaddr*)&s, sock_len);
     if (error != 0)
     {
         printf("main: bind error\n");
@@ -519,7 +503,7 @@ main(int argc, char** argv)
         printf("main: listen error\n");
         return 1;
     }
-    printf("main: listen ok socket %d\n", hdhrd->listener);
+    printf("main: listen ok socket %d uds %s\n", hdhrd->listener, hdhrd_uds);
     hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
     if (hdhr == NULL)
     {
@@ -528,6 +512,10 @@ main(int argc, char** argv)
     }
     dev_name = hdhomerun_device_get_name(hdhr);
     printf("main: hdhomerun_device_get_name returns %s\n", dev_name);
+
+    //hdhomerun_device_set_tuner_channel(hdhr, "44");
+    //hdhomerun_device_set_tuner_program(hdhr, "3");
+
     error = hdhomerun_device_stream_start(hdhr);
     printf("main: hdhomerun_device_stream_start returns %d\n", error);
     if (error == 1)
@@ -552,7 +540,7 @@ main(int argc, char** argv)
                 printf("main: get_mstime failed\n");
                 break;
             }
-            bytes = 32 * 1024;
+            bytes = HDHRD_BUFFER_SIZE;
             data = hdhomerun_device_stream_recv(hdhr, bytes, &bytes);
             //printf("main: data %p bytes %ld\n", data, bytes);
             error = 0;
@@ -563,9 +551,9 @@ main(int argc, char** argv)
                     break;
                 }
                 lbytes = bytes;
-                if (lbytes > 188)
+                if (lbytes > TS_PACKET_SIZE) /* 188 */
                 {
-                    lbytes = 188;
+                    lbytes = TS_PACKET_SIZE;
                 }
                 error = process_mpeg_ts_packet(data, lbytes, &(hdhrd->cb),
                                                hdhrd);
@@ -588,7 +576,7 @@ main(int argc, char** argv)
                     break;
                 }
                 diff_time = now - start_time;
-                if (diff_time >= 15)
+                if (diff_time >= HDHRD_SELECT_MSTIME)
                 {
                     break;
                 }
@@ -596,8 +584,11 @@ main(int argc, char** argv)
                 FD_ZERO(&rfds);
                 FD_ZERO(&wfds);
                 FD_SET(hdhrd->listener, &rfds);
-                hdhrd_get_fds(hdhrd, &max_fd, &rfds, &wfds);
-                millis = 15 - diff_time;
+                if (hdhrd_peer_get_fds(hdhrd, &max_fd, &rfds, &wfds) != 0)
+                {
+                    printf("main: hdhrd_peer_get_fds failed\n");
+                }
+                millis = HDHRD_SELECT_MSTIME - diff_time;
                 if (millis < 1)
                 {
                     millis = 1;
@@ -610,7 +601,19 @@ main(int argc, char** argv)
                 {
                     if (FD_ISSET(hdhrd->listener, &rfds))
                     {
+                        sock_len = sizeof(struct sockaddr_un);
                         printf("got connection\n");
+                        sck = accept(hdhrd->listener, (struct sockaddr*)&s,
+                                     &sock_len);
+                        if (hdhrd_peer_add_fd(hdhrd, sck) != 0)
+                        {
+                            printf("main: hdhrd_peer_add_fd failed\n");
+                            close(sck);
+                        }
+                    }
+                    if (hdhrd_peer_check_fds(hdhrd, &rfds, &wfds) != 0)
+                    {
+                        printf("main: hdhrd_peer_check_fds failed\n");
                     }
                 }
             }
@@ -620,7 +623,8 @@ main(int argc, char** argv)
     mpeg_ts_cleanup(&(hdhrd->cb));
     close(hdhrd->listener);
     hdhrd_ac3_delete(hdhrd->ac3);
+    hdhrd_peer_cleanup(hdhrd);
     free(hdhrd);
-    unlink(HDHRD_UDS);
+    unlink(hdhrd_uds);
     return 0;
 }

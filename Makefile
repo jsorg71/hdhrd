@@ -1,5 +1,5 @@
 
-OBJS=hdhrd.o mpeg_ts.o hdhrd_ac3.o
+OBJS=hdhrd.o mpeg_ts.o hdhrd_ac3.o hdhrd_peer.o
 
 CFLAGS=-O2 -g -Wall -Wextra -I/usr/include/libhdhomerun
 # older distro use this
