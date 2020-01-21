@@ -488,7 +488,8 @@ main(int argc, char** argv)
     }
     signal(SIGINT, sig_int);
     signal(SIGPIPE, sig_pipe);
-    snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
+    //snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
+    snprintf(hdhrd_uds, 255, HDHRD_UDS, 0);
     unlink(hdhrd_uds);
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
     if (hdhrd->listener == -1)

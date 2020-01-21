@@ -73,6 +73,7 @@ hdhrd_peer_remove_one(struct hdhrd_info* hdhrd, struct peer_info** apeer,
                       struct peer_info** alast_peer)
 {
     struct peer_info* peer;
+    struct peer_info* lpeer;
     struct peer_info* last_peer;
 
     peer = *apeer;
@@ -107,9 +108,9 @@ hdhrd_peer_remove_one(struct hdhrd_info* hdhrd, struct peer_info** apeer,
     {
         /* remome middle item */
         last_peer->next = peer->next;
-        hdhrd_peer_delete_one(peer);
-        last_peer = peer;
+        lpeer = peer;
         peer = peer->next;
+        hdhrd_peer_delete_one(lpeer);
     }
     *apeer = peer;
     *alast_peer = last_peer;
