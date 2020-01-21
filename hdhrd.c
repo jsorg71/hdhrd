@@ -22,6 +22,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 
 #include <hdhomerun.h>
@@ -444,6 +446,13 @@ sig_int(int sig)
 }
 
 /*****************************************************************************/
+static void
+sig_pipe(int sig)
+{
+    (void)sig;
+}
+
+/*****************************************************************************/
 /* FD_SETSIZE */
 int
 main(int argc, char** argv)
@@ -478,6 +487,7 @@ main(int argc, char** argv)
         return 1;
     }
     signal(SIGINT, sig_int);
+    signal(SIGPIPE, sig_pipe);
     snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
     unlink(hdhrd_uds);
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
@@ -602,13 +612,16 @@ main(int argc, char** argv)
                     if (FD_ISSET(hdhrd->listener, &rfds))
                     {
                         sock_len = sizeof(struct sockaddr_un);
-                        printf("got connection\n");
                         sck = accept(hdhrd->listener, (struct sockaddr*)&s,
                                      &sock_len);
-                        if (hdhrd_peer_add_fd(hdhrd, sck) != 0)
+                        printf("main: got connection sck %d\n", sck);
+                        if (sck != -1)
                         {
-                            printf("main: hdhrd_peer_add_fd failed\n");
-                            close(sck);
+                            if (hdhrd_peer_add_fd(hdhrd, sck) != 0)
+                            {
+                                printf("main: hdhrd_peer_add_fd failed\n");
+                                close(sck);
+                            }
                         }
                     }
                     if (hdhrd_peer_check_fds(hdhrd, &rfds, &wfds) != 0)

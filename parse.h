@@ -41,6 +41,7 @@ struct stream
     char *end;
     int size;
     int pad0;
+    struct stream* next;
 };
 
 /******************************************************************************/
