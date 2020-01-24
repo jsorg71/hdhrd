@@ -28,6 +28,8 @@ int
 hdhrd_peer_add_fd(struct hdhrd_info* hdhrd, int sck);
 int
 hdhrd_peer_cleanup(struct hdhrd_info* hdhrd);
+int
+hdhrd_peer_send_all(struct hdhrd_info* hdhrd, struct stream* out_s);
 
 #endif
 

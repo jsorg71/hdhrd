@@ -267,6 +267,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                 }
                 else
                 {
+                    //printf("hdhrd_peer_check_fds: send ok, sent %d\n", sent);
                     out_s->p += sent;
                     if (out_s->p >= out_s->end)
                     {
@@ -332,6 +333,53 @@ hdhrd_peer_cleanup(struct hdhrd_info* hdhrd)
     }
     hdhrd->peer_head = NULL;
     hdhrd->peer_tail = NULL;
+    return 0;
+}
+
+/*****************************************************************************/
+int
+hdhrd_peer_send_all(struct hdhrd_info* hdhrd, struct stream* out_s)
+{
+    struct peer_info* peer;
+    struct stream* lout_s;
+    int bytes;
+
+    peer = hdhrd->peer_head;
+    while (peer != NULL)
+    {
+        lout_s = (struct stream*)calloc(1, sizeof(struct stream));
+        if (lout_s == NULL)
+        {
+            return 1;
+        }
+        bytes = (int)(out_s->end - out_s->data);
+        if ((bytes < 1) || (bytes > 1024 * 1024))
+        {
+            free(lout_s);
+            return 2;
+        }
+        lout_s->data = (char*)malloc(bytes);
+        if (lout_s->data == NULL)
+        {
+            free(lout_s);
+            return 3;
+        }
+        lout_s->p = lout_s->data;
+        out_uint8p(lout_s, out_s->data, bytes);
+        lout_s->end = lout_s->p;
+        lout_s->p = lout_s->data;
+        if (peer->out_s_tail == NULL)
+        {
+            peer->out_s_head = lout_s;
+            peer->out_s_tail = lout_s;
+        }
+        else
+        {
+            peer->out_s_tail->next = lout_s;
+            peer->out_s_tail = lout_s;
+        }
+        peer = peer->next;
+    }
     return 0;
 }
 
