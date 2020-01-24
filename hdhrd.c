@@ -28,6 +28,8 @@
 
 #include <hdhomerun.h>
 
+#include <yami_inf.h>
+
 #include "arch.h"
 #include "parse.h"
 #include "mpeg_ts.h"
@@ -170,9 +172,11 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     int error;
     int pts;
     int dts;
+    int cdata_bytes;
     struct stream* s;
+    struct hdhrd_info* hdhrd;
 
-    (void)udata;
+    hdhrd = (struct hdhrd_info*)udata;
 
     //printf("tmpegts_video_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
     //if (pi->flags0 & 1)
@@ -187,6 +191,34 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
+    if ((hdhrd->yami == NULL) && (pi->flags0 & FLAGS0_RANDOM_ACCESS))
+    {
+        error = yami_decoder_create(&(hdhrd->yami), 1920, 1080, YI_TYPE_MPEG2, 0);
+        printf("tmpegts_video_cb: yami_decoder_create rv %d\n", error);
+    }
+    if (hdhrd->yami != NULL)
+    {
+        cdata_bytes = (int)(s->end - s->p);
+        error = yami_decoder_decode(hdhrd->yami, s->p, cdata_bytes);
+        //printf("tmpegts_video_cb: cdata_bytes %d yami_decoder_decode rv %d\n", cdata_bytes, error);
+        if (error == 0)
+        {
+            error = yami_decoder_get_fd_dst(hdhrd->yami, 0, 0, 0, 0, 0, 0);
+            //printf("tmpegts_video_cb: yami_decoder_get_fd_dst rv %d\n", error);
+            if (error == 0)
+            {
+            }
+            else
+            {
+                printf("tmpegts_video_cb: yami_decoder_get_fd_dst failed error %d\n", error);
+            }
+        }
+        else
+        {
+            printf("tmpegts_video_cb: yami_decoder_decode failed error %d\n", error);
+        }
+    }
+
     //printf("tmpegts_video_cb: error %d pts %10.10u dts %10.10u\n", error, pts, dts);
     //hex_dump(pi->s->p, 32);
     return 0;
@@ -205,6 +237,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     int channels;
     int bytes;
     struct stream* s;
+    struct stream* out_s;
     struct hdhrd_info* hdhrd;
 
     hdhrd = (struct hdhrd_info*)udata;
@@ -228,6 +261,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     while (s->p < s->end)
     {
         cdata_bytes = (int)(s->end - s->p);
+        decoded = 0;
         error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
                                  &cdata_bytes_processed, &decoded);
         //printf("tmpegts_audio_cb: error %d cdata_bytes %d "
@@ -241,8 +275,32 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
         s->p += cdata_bytes_processed;
         if (decoded)
         {
-            hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels, &bytes);
+            error = hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels, &bytes);
+            if (error != 0)
+            {
+                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_info failed %d\n", error);
+            }
             //printf("tmpegts_audio_cb: channels %d bytes %d\n", channels, bytes);
+            out_s = (struct stream*)calloc(1, sizeof(struct stream));
+            out_s->data = (char*)malloc(bytes + 1024);
+            out_s->p = out_s->data;
+            out_uint32_le(out_s, 2);
+            out_uint32_le(out_s, 24 + bytes);
+            out_uint32_le(out_s, pts);
+            out_uint32_le(out_s, dts);
+            out_uint32_le(out_s, channels);
+            out_uint32_le(out_s, bytes);
+            error = hdhrd_ac3_get_frame_data(hdhrd->ac3, out_s->p, bytes);
+            if (error != 0)
+            {
+                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_data failed %d\n", error);
+            }
+            out_s->p += bytes;
+            out_s->end = out_s->p;
+            out_s->p = out_s->data;
+            hdhrd_peer_send_all(hdhrd, out_s);
+            free(out_s->data);
+            free(out_s);
         }
     }
     return 0;
@@ -488,6 +546,20 @@ main(int argc, char** argv)
     }
     signal(SIGINT, sig_int);
     signal(SIGPIPE, sig_pipe);
+
+    hdhrd->yami_fd = open("/dev/dri/renderD128", O_RDWR);
+    if (hdhrd->yami_fd == -1)
+    {
+        printf("main: open /dev/dri/renderD128 failed\n");
+        return 1;
+    }
+    error = yami_init(YI_TYPE_DRM, (void*)(long)(hdhrd->yami_fd));
+    printf("main: yami_init rv %d\n", error);
+    if (error != 0)
+    {
+        printf("main: yami_init failed %d\n", error);
+    }
+
     //snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
     snprintf(hdhrd_uds, 255, HDHRD_UDS, 0);
     unlink(hdhrd_uds);

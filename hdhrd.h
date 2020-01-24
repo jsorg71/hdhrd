@@ -27,8 +27,9 @@ struct hdhrd_info
 {
     struct tmpegts_cb cb;
     int listener;
-    int pad0;
+    int yami_fd;
     void* ac3;
+    void* yami;
     struct peer_info* peer_head;
     struct peer_info* peer_tail;
 };
