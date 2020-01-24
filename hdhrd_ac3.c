@@ -165,7 +165,7 @@ hdhrd_ac3_decode(void* obj, void* cdata, int cdata_bytes,
                     self->channels++;
                 }
                 self->bit_rate = bit_rate;
-                self->cdata = (uint8_t*)malloc(len);
+                self->cdata = (uint8_t*)malloc(1024 * 1024);
                 if (self->cdata == NULL)
                 {
                     return 2;
@@ -242,10 +242,7 @@ hdhrd_ac3_get_frame_data(void* obj, void* data, int data_bytes)
     out_samples = (short*)data;
     for (index = 0; index < 6; index++)
     {
-        if (a52_block(self->state))
-        {
-            return 1;
-        }
+        a52_block(self->state);
         float_to_short(self->samples,
                        out_samples + index * 256 * self->channels,
                        self->channels);
