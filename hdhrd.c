@@ -177,8 +177,8 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     struct hdhrd_info* hdhrd;
 
     hdhrd = (struct hdhrd_info*)udata;
-
-    //printf("tmpegts_video_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
+    //printf("tmpegts_video_cb: bytes %10.10d flags0 0x%8.8x\n",
+    //       (int)(pi->s->end - pi->s->data), pi->flags0);
     //if (pi->flags0 & 1)
     //{
     //    printf("tmpegts_video_cb: pcr %10.10u\n", pi->pcr);
@@ -192,34 +192,47 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
         return 0;
     }
     if ((hdhrd->yami == NULL) && (pi->flags0 & FLAGS0_RANDOM_ACCESS))
+    //if (pi->flags0 & FLAGS0_RANDOM_ACCESS)
     {
-        error = yami_decoder_create(&(hdhrd->yami), 1920, 1080, YI_TYPE_MPEG2, 0);
+        yami_decoder_delete(hdhrd->yami);
+        error = yami_decoder_create(&(hdhrd->yami), 1920, 1080,
+                                    YI_TYPE_MPEG2, 0);
         printf("tmpegts_video_cb: yami_decoder_create rv %d\n", error);
     }
     if (hdhrd->yami != NULL)
     {
         cdata_bytes = (int)(s->end - s->p);
+        //memset(s->p + cdata_bytes, 0, 1024);
         error = yami_decoder_decode(hdhrd->yami, s->p, cdata_bytes);
-        //printf("tmpegts_video_cb: cdata_bytes %d yami_decoder_decode rv %d\n", cdata_bytes, error);
+        //hex_dump(s->p, 128);
+        //printf("tmpegts_video_cb: cdata_bytes %d yami_decoder_decode "
+        //       rv %d\n", cdata_bytes, error);
         if (error == 0)
         {
             error = yami_decoder_get_fd_dst(hdhrd->yami, 0, 0, 0, 0, 0, 0);
-            //printf("tmpegts_video_cb: yami_decoder_get_fd_dst rv %d\n", error);
+            //printf("tmpegts_video_cb: yami_decoder_get_fd_dst rv %d\n",
+            //       error);
             if (error == 0)
             {
             }
             else
             {
-                printf("tmpegts_video_cb: yami_decoder_get_fd_dst failed error %d\n", error);
+                printf("tmpegts_video_cb: yami_decoder_get_fd_dst failed "
+                       "error %d\n", error);
+                //yami_decoder_delete(hdhrd->yami);
+                //hdhrd->yami = NULL;
             }
         }
         else
         {
-            printf("tmpegts_video_cb: yami_decoder_decode failed error %d\n", error);
+            printf("tmpegts_video_cb: yami_decoder_decode failed error %d\n",
+                   error);
+            //yami_decoder_delete(hdhrd->yami);
+            //hdhrd->yami = NULL;
         }
     }
-
-    //printf("tmpegts_video_cb: error %d pts %10.10u dts %10.10u\n", error, pts, dts);
+    //printf("tmpegts_video_cb: error %d pts %10.10u dts %10.10u\n", error,
+    //       pts, dts);
     //hex_dump(pi->s->p, 32);
     return 0;
 }
@@ -258,7 +271,9 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     //printf("tmpegts_audio_cb: error %d pts %10.10u dts %10.10u\n", error, pts, dts);
     //hex_dump(pi->s->p, 32);
 
-    while (s->p < s->end)
+    //return 0;
+
+    while (s_check_rem(s, 5))
     {
         cdata_bytes = (int)(s->end - s->p);
         decoded = 0;
@@ -302,6 +317,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
             free(out_s->data);
             free(out_s);
         }
+        break;
     }
     return 0;
 }

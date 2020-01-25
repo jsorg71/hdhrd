@@ -44,7 +44,7 @@ struct tmpegts
     int transport_private_data_flag;
     int adaptation_field_extension_flag;
 
-    const unsigned char* ppcr;
+    const char* ppcr;
 };
 
 #define FLAGS0_PCR_VALID        (1 << 0)

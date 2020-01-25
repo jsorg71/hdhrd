@@ -40,8 +40,7 @@ read_pcr(const void* ptr, int* pcr)
 
 /*****************************************************************************/
 static int
-process_pid(struct tmpegts_cb* cb,
-            const unsigned char* data8, int cb_bytes,
+process_pid(struct tmpegts_cb* cb, struct stream* in_s,
             struct tmpegts* mpegts, void* udata)
 {
     struct pid_info* pi;
@@ -49,7 +48,9 @@ process_pid(struct tmpegts_cb* cb,
     int error;
     int index;
     int count;
+    int cb_bytes;
 
+    cb_bytes = (int) (in_s->end - in_s->p);
     count = cb->num_pids;
     for (index = 0; index < count; index++)
     {
@@ -107,7 +108,7 @@ process_pid(struct tmpegts_cb* cb,
                     }
                     else
                     {
-                        out_uint8a(s, data8, cb_bytes);
+                        out_uint8a(s, in_s->p, cb_bytes);
                         s->end = s->p;
                     }
                 }
@@ -115,7 +116,8 @@ process_pid(struct tmpegts_cb* cb,
             if (mpegts->ppcr != NULL)
             {
                 pi->flags0 |= FLAGS0_PCR_VALID;
-                read_pcr(mpegts->ppcr + 1, &(pi->pcr));
+                read_pcr(mpegts->ppcr, &(pi->pcr));
+                //printf("pcr %10.10u\n", pi->pcr);
             }
             if (mpegts->random_access_indicator)
             {
@@ -133,15 +135,15 @@ process_mpeg_ts_packet(const void* data, int bytes,
 {
     unsigned int header;
     struct tmpegts mpegts;
-    const unsigned char* data8;
-    const unsigned char* data8_end;
-    int cb_bytes;
+    struct stream ls;
+    char* holdp;
 
+    memset(&ls, 0, sizeof(ls));
+    ls.data = (char*)data;
+    ls.p = ls.data;
+    ls.end = ls.p + bytes;
+    in_uint32_be(&ls, header);
     memset(&mpegts, 0, sizeof(mpegts));
-    data8 = (const unsigned char*) data;
-    data8_end = data8 + bytes;
-    header = (data8[0] << 24) | (data8[1] << 16) | (data8[2] << 8) | data8[3];
-    data8 += 4;
     mpegts.sync_byte                    = (header & 0xff000000) >> 24;
     mpegts.transport_error_indicator    = (header & 0x00800000) >> 23;
     mpegts.payload_unit_start_indicator = (header & 0x00400000) >> 22;
@@ -165,28 +167,58 @@ process_mpeg_ts_packet(const void* data, int bytes,
         /* not supported */
         return 3;
     }
-    if (mpegts.adaptation_field_flag && (data8[0] > 0))
+    if (mpegts.adaptation_field_flag)
     {
-        mpegts.adaptation_field_length = data8[0];
-        data8++;
-        header = data8[0];
-        mpegts.discontinuity_indicator              = (header & 0x80) >> 7;
-        mpegts.random_access_indicator              = (header & 0x40) >> 6;
-        mpegts.elementary_stream_priority_indicator = (header & 0x20) >> 5;
-        mpegts.pcr_flag                             = (header & 0x10) >> 4;
-        mpegts.opcr_flag                            = (header & 0x08) >> 3;
-        mpegts.splicing_point_flag                  = (header & 0x04) >> 2;
-        mpegts.transport_private_data_flag          = (header & 0x02) >> 1;
-        mpegts.adaptation_field_extension_flag      = (header & 0x01) >> 0;
-        if (mpegts.pcr_flag)
+        if (!s_check_rem(&ls, 1))
         {
-            /* 48 bit */
-            mpegts.ppcr = data8;
+            return 4;
         }
-        data8 += mpegts.adaptation_field_length;
+        in_uint8(&ls, mpegts.adaptation_field_length);
+        if (mpegts.adaptation_field_length > 0)
+        {
+            if (!s_check_rem(&ls, mpegts.adaptation_field_length))
+            {
+                return 5;
+            }
+            holdp = ls.p;
+            in_uint8(&ls, header);
+            mpegts.discontinuity_indicator              = (header & 0x80) >> 7;
+            mpegts.random_access_indicator              = (header & 0x40) >> 6;
+            mpegts.elementary_stream_priority_indicator = (header & 0x20) >> 5;
+            mpegts.pcr_flag                             = (header & 0x10) >> 4;
+            mpegts.opcr_flag                            = (header & 0x08) >> 3;
+            mpegts.splicing_point_flag                  = (header & 0x04) >> 2;
+            mpegts.transport_private_data_flag          = (header & 0x02) >> 1;
+            mpegts.adaptation_field_extension_flag      = (header & 0x01) >> 0;
+            if (mpegts.discontinuity_indicator)
+            {
+                //printf("discontinuity_indicator\n");
+            }
+            if (mpegts.pcr_flag)
+            {
+                /* 48 bit */
+                if (!s_check_rem(&ls, 6))
+                {
+                    return 6;
+                }
+                in_uint8p(&ls, mpegts.ppcr, 6);
+            }
+            if (mpegts.splicing_point_flag)
+            {
+                //printf("splicing_point_flag\n");
+            }
+            if (mpegts.transport_private_data_flag)
+            {
+                //printf("transport_private_data_flag\n");
+            }
+            if (mpegts.adaptation_field_extension_flag)
+            {
+                //printf("got extension\n");
+            }
+            ls.p = holdp + mpegts.adaptation_field_length;
+        }
     }
-    cb_bytes = (int) (data8_end - data8);
-    return process_pid(cb, data8, cb_bytes, &mpegts, udata);
+    return process_pid(cb, &ls, &mpegts, udata);
 }
 
 /*****************************************************************************/
