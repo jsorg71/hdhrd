@@ -244,7 +244,7 @@ hdhrd_ac3_get_frame_data(void* obj, void* data, int data_bytes)
     {
         if (a52_block(self->state) != 0)
         {
-            //return 2;
+            return 2;
         }
         float_to_short(self->samples,
                        out_samples + index * 256 * self->channels,

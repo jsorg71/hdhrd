@@ -190,10 +190,6 @@ process_mpeg_ts_packet(const void* data, int bytes,
             mpegts.splicing_point_flag                  = (header & 0x04) >> 2;
             mpegts.transport_private_data_flag          = (header & 0x02) >> 1;
             mpegts.adaptation_field_extension_flag      = (header & 0x01) >> 0;
-            if (mpegts.discontinuity_indicator)
-            {
-                //printf("discontinuity_indicator\n");
-            }
             if (mpegts.pcr_flag)
             {
                 /* 48 bit */
@@ -202,18 +198,6 @@ process_mpeg_ts_packet(const void* data, int bytes,
                     return 6;
                 }
                 in_uint8p(&ls, mpegts.ppcr, 6);
-            }
-            if (mpegts.splicing_point_flag)
-            {
-                //printf("splicing_point_flag\n");
-            }
-            if (mpegts.transport_private_data_flag)
-            {
-                //printf("transport_private_data_flag\n");
-            }
-            if (mpegts.adaptation_field_extension_flag)
-            {
-                //printf("got extension\n");
             }
             ls.p = holdp + mpegts.adaptation_field_length;
         }

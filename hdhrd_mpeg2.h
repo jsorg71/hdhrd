@@ -16,23 +16,21 @@
  * limitations under the License.
  */
 
-#ifndef _HDHRD_H_
-#define _HDHRD_H_
+#ifndef _HDHRD_MPEG2_H_
+#define _HDHRD_MPEG2_H_
 
-#define HDHRD_BUFFER_SIZE (256 * 1024)
-#define HDHRD_SELECT_MSTIME 15
-#define HDHRD_UDS "/tmp/wtv_hdhrd%d"
-
-struct hdhrd_info
-{
-    struct tmpegts_cb cb;
-    int listener;
-    int yami_fd;
-    void* ac3;
-    void* yami;
-    struct peer_info* peer_head;
-    struct peer_info* peer_tail;
-};
+int
+hdhrd_mpeg2_create(void** obj);
+int
+hdhrd_mpeg2_delete(void* obj);
+int
+hdhrd_mpeg2_decode(void* obj, void* cdata, int cdata_bytes,
+                   int* cdata_bytes_processed, int* decoded);
+int
+hdhrd_mpeg2_get_frame_info(void* obj, int* width, int* height,
+                           int* format, int* bytes);
+int
+hdhrd_mpeg2_get_frame_data(void* obj, void* data, int data_bytes);
 
 #endif
 

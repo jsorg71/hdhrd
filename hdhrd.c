@@ -118,7 +118,7 @@ read_time(const void* ptr, int* time)
 /*****************************************************************************/
 /* https://en.wikipedia.org/wiki/Packetized_elementary_stream */
 static int
-read_pes(struct stream* s, int* pts, int* dts)
+read_pes(struct stream* s, int* bytes, int* pts, int* dts)
 {
     unsigned char code;
     unsigned char remaining;
@@ -128,8 +128,11 @@ read_pes(struct stream* s, int* pts, int* dts)
     {
         return 1;
     }
-    in_uint8s(s, 7);
+    in_uint8s(s, 4);
+    in_uint16_be(s, *bytes);
+    in_uint8s(s, 1);
     in_uint8(s, code);
+    //printf("read_pes: code 0x%2.2x\n", code);
     in_uint8(s, remaining);
     holdp = s->p;
     if (!s_check_rem(s, remaining))
@@ -173,6 +176,7 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     int pts;
     int dts;
     int cdata_bytes;
+    int pdu_bytes;
     struct stream* s;
     struct hdhrd_info* hdhrd;
 
@@ -186,27 +190,26 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     s = pi->s;
     pts = 0;
     dts = 0;
-    error = read_pes(s, &pts, &dts);
+    error = read_pes(s, &pdu_bytes, &pts, &dts);
     if (error != 0)
     {
         return 0;
     }
+    //printf("tmpegts_video_cb: error %d pts %10.10u dts %10.10u "
+    //       "pdu_bytes %d\n", error, pts, dts, pdu_bytes);
+    //return 0;
     if ((hdhrd->yami == NULL) && (pi->flags0 & FLAGS0_RANDOM_ACCESS))
-    //if (pi->flags0 & FLAGS0_RANDOM_ACCESS)
     {
         yami_decoder_delete(hdhrd->yami);
-        error = yami_decoder_create(&(hdhrd->yami), 1920, 1080,
-                                    YI_TYPE_MPEG2, 0);
+        error = yami_decoder_create(&(hdhrd->yami), 0, 0, YI_TYPE_MPEG2, 0);
         printf("tmpegts_video_cb: yami_decoder_create rv %d\n", error);
     }
     if (hdhrd->yami != NULL)
     {
         cdata_bytes = (int)(s->end - s->p);
-        //memset(s->p + cdata_bytes, 0, 1024);
         error = yami_decoder_decode(hdhrd->yami, s->p, cdata_bytes);
-        //hex_dump(s->p, 128);
         //printf("tmpegts_video_cb: cdata_bytes %d yami_decoder_decode "
-        //       rv %d\n", cdata_bytes, error);
+        //       "rv %d\n", cdata_bytes, error);
         if (error == 0)
         {
             error = yami_decoder_get_fd_dst(hdhrd->yami, 0, 0, 0, 0, 0, 0);
@@ -217,23 +220,16 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
             }
             else
             {
-                printf("tmpegts_video_cb: yami_decoder_get_fd_dst failed "
-                       "error %d\n", error);
-                //yami_decoder_delete(hdhrd->yami);
-                //hdhrd->yami = NULL;
+                printf("tmpegts_video_cb: yami_decoder_get_fd_dst "
+                       "failed rv %d\n", error);
             }
         }
         else
         {
-            printf("tmpegts_video_cb: yami_decoder_decode failed error %d\n",
-                   error);
-            //yami_decoder_delete(hdhrd->yami);
-            //hdhrd->yami = NULL;
+            printf("tmpegts_video_cb: yami_decoder_decode "
+                   "failed rv %d\n", error);
         }
     }
-    //printf("tmpegts_video_cb: error %d pts %10.10u dts %10.10u\n", error,
-    //       pts, dts);
-    //hex_dump(pi->s->p, 32);
     return 0;
 }
 
@@ -249,13 +245,16 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     int decoded;
     int channels;
     int bytes;
+    int pdu_bytes;
     struct stream* s;
     struct stream* out_s;
     struct hdhrd_info* hdhrd;
 
     hdhrd = (struct hdhrd_info*)udata;
 
-    //printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n", (int)(pi->s->end - pi->s->data), pi->flags0);
+    //printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n",
+    //       (int)(pi->s->end - pi->s->data), pi->flags0);
+    //hex_dump(pi->s->data, 32);
     //if (pi->flags0 & 1)
     //{
     //    printf("tmpegts_audio_cb: pcr 0x%10.10u\n", pi->pcr);
@@ -263,16 +262,15 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     s = pi->s;
     pts = 0;
     dts = 0;
-    error = read_pes(s, &pts, &dts);
+    error = read_pes(s, &pdu_bytes, &pts, &dts);
     if (error != 0)
     {
         return 0;
     }
-    //printf("tmpegts_audio_cb: error %d pts %10.10u dts %10.10u\n", error, pts, dts);
+    //printf("tmpegts_audio_cb: error %d pts %10.10u dts %10.10u "
+    //       "pdu_bytes %d\n", error, pts, dts, pdu_bytes);
     //hex_dump(pi->s->p, 32);
-
     //return 0;
-
     while (s_check_rem(s, 5))
     {
         cdata_bytes = (int)(s->end - s->p);
@@ -293,9 +291,11 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
             error = hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels, &bytes);
             if (error != 0)
             {
-                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_info failed %d\n", error);
+                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_info "
+                       "failed %d\n", error);
             }
-            //printf("tmpegts_audio_cb: channels %d bytes %d\n", channels, bytes);
+            //printf("tmpegts_audio_cb: channels %d bytes %d\n",
+            //       channels, bytes);
             out_s = (struct stream*)calloc(1, sizeof(struct stream));
             out_s->data = (char*)malloc(bytes + 1024);
             out_s->p = out_s->data;
@@ -308,7 +308,8 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
             error = hdhrd_ac3_get_frame_data(hdhrd->ac3, out_s->p, bytes);
             if (error != 0)
             {
-                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_data failed %d\n", error);
+                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_data "
+                       "failed %d\n", error);
             }
             out_s->p += bytes;
             out_s->end = out_s->p;
@@ -317,7 +318,6 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
             free(out_s->data);
             free(out_s);
         }
-        break;
     }
     return 0;
 }
@@ -615,6 +615,9 @@ main(int argc, char** argv)
     //hdhomerun_device_set_tuner_channel(hdhr, "44");
     //hdhomerun_device_set_tuner_program(hdhr, "3");
 
+    //hdhomerun_device_set_tuner_channel(hdhr, "45");
+    //hdhomerun_device_set_tuner_program(hdhr, "1");
+
     error = hdhomerun_device_stream_start(hdhr);
     printf("main: hdhomerun_device_stream_start returns %d\n", error);
     if (error == 1)
@@ -641,7 +644,8 @@ main(int argc, char** argv)
             }
             bytes = HDHRD_BUFFER_SIZE;
             data = hdhomerun_device_stream_recv(hdhr, bytes, &bytes);
-            //printf("main: data %p bytes %ld\n", data, bytes);
+            //printf("main: data %p HDHRD_BUFFER_SIZE %d, bytes %ld\n",
+            //       data, HDHRD_BUFFER_SIZE, bytes);
             error = 0;
             while ((error == 0) && (bytes > 3))
             {
