@@ -27,13 +27,16 @@
 int
 hdhrd_mpeg2_create(void** obj)
 {
-
+    (void)obj;
+    return 0;
 }
 
 /*****************************************************************************/
 int
 hdhrd_mpeg2_delete(void* obj)
 {
+    (void)obj;
+    return 0;
 }
 
 /*****************************************************************************/
@@ -41,6 +44,12 @@ int
 hdhrd_mpeg2_decode(void* obj, void* cdata, int cdata_bytes,
                    int* cdata_bytes_processed, int* decoded)
 {
+    (void)obj;
+    (void)cdata;
+    (void)cdata_bytes;
+    (void)cdata_bytes_processed;
+    (void)decoded;
+    return 0;
 }
 
 /*****************************************************************************/
@@ -48,11 +57,21 @@ int
 hdhrd_mpeg2_get_frame_info(void* obj, int* width, int* height,
                            int* format, int* bytes)
 {
+    (void)obj;
+    (void)width;
+    (void)height;
+    (void)format;
+    (void)bytes;
+    return 0;
 }
 
 /*****************************************************************************/
 int
 hdhrd_mpeg2_get_frame_data(void* obj, void* data, int data_bytes)
 {
+    (void)obj;
+    (void)data;
+    (void)data_bytes;
+    return 0;
 }
 

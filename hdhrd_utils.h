@@ -16,26 +16,12 @@
  * limitations under the License.
  */
 
-#ifndef _HDHRD_H_
-#define _HDHRD_H_
-
-#define HDHRD_BUFFER_SIZE (256 * 1024)
-#define HDHRD_SELECT_MSTIME 15
-#define HDHRD_UDS "/tmp/wtv_hdhrd%d"
-
-struct hdhrd_info
-{
-    struct tmpegts_cb cb;
-    int listener;
-    int yami_fd;
-    void* ac3;
-    void* yami;
-    struct peer_info* peer_head;
-    struct peer_info* peer_tail;
-};
+#ifndef _HDHRD_UTILS_H_
+#define _HDHRD_UTILS_H_
 
 int
 get_mstime(unsigned int* mstime);
+int
+hex_dump(const void* data, int bytes);
 
 #endif
-

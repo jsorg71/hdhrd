@@ -21,7 +21,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -36,63 +35,17 @@
 #include "hdhrd.h"
 #include "hdhrd_ac3.h"
 #include "hdhrd_peer.h"
+#include "hdhrd_log.h"
+#include "hdhrd_utils.h"
 
 static volatile int g_term = 0;
 
-/*****************************************************************************/
-int
-get_mstime(unsigned int* mstime)
+struct settings_info
 {
-    struct timespec ts;
-    unsigned int the_tick;
-
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
-    {
-        return 1;
-    }
-    the_tick = ts.tv_nsec / 1000000;
-    the_tick += ts.tv_sec * 1000;
-    *mstime = the_tick;
-    return 0;
-}
-
-/*****************************************************************************/
-int
-hex_dump(const void* data, int bytes)
-{
-    const unsigned char *line;
-    int i;
-    int thisline;
-    int offset;
-
-    line = (const unsigned char *)data;
-    offset = 0;
-    while (offset < bytes)
-    {
-        printf("%04x ", offset);
-        thisline = bytes - offset;
-        if (thisline > 16)
-        {
-            thisline = 16;
-        }
-        for (i = 0; i < thisline; i++)
-        {
-            printf("%02x ", line[i]);
-        }
-        for (; i < 16; i++)
-        {
-            printf("   ");
-        }
-        for (i = 0; i < thisline; i++)
-        {
-            printf("%c", (line[i] >= 0x20 && line[i] < 0x7f) ? line[i] : '.');
-        }
-        printf("\n");
-        offset += thisline;
-        line += thisline;
-    }
-    return 0;
-}
+    char hdhrd_uds[256];
+    char hdhrd_channel_name[256];
+    char hdhrd_program_name[256];
+};
 
 /*****************************************************************************/
 static int
@@ -132,7 +85,7 @@ read_pes(struct stream* s, int* bytes, int* pts, int* dts)
     in_uint16_be(s, *bytes);
     in_uint8s(s, 1);
     in_uint8(s, code);
-    //printf("read_pes: code 0x%2.2x\n", code);
+    LOGLN10((LOG_DEBUG, LOGS "code 0x%2.2x", LOGP, code));
     in_uint8(s, remaining);
     holdp = s->p;
     if (!s_check_rem(s, remaining))
@@ -181,12 +134,8 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     struct hdhrd_info* hdhrd;
 
     hdhrd = (struct hdhrd_info*)udata;
-    //printf("tmpegts_video_cb: bytes %10.10d flags0 0x%8.8x\n",
-    //       (int)(pi->s->end - pi->s->data), pi->flags0);
-    //if (pi->flags0 & 1)
-    //{
-    //    printf("tmpegts_video_cb: pcr %10.10u\n", pi->pcr);
-    //}
+    LOGLN10((LOG_DEBUG, LOGS "bytes %10.10d flags0 0x%8.8x", LOGP,
+             (int)(pi->s->end - pi->s->data), pi->flags0));
     s = pi->s;
     pts = 0;
     dts = 0;
@@ -195,39 +144,38 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
-    //printf("tmpegts_video_cb: error %d pts %10.10u dts %10.10u "
-    //       "pdu_bytes %d\n", error, pts, dts, pdu_bytes);
-    //return 0;
+    LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
+             "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
     if ((hdhrd->yami == NULL) && (pi->flags0 & FLAGS0_RANDOM_ACCESS))
     {
         yami_decoder_delete(hdhrd->yami);
         error = yami_decoder_create(&(hdhrd->yami), 0, 0, YI_TYPE_MPEG2, 0);
-        printf("tmpegts_video_cb: yami_decoder_create rv %d\n", error);
+        LOGLN0((LOG_INFO, LOGS "yami_decoder_create rv %d", LOGP, error));
     }
     if (hdhrd->yami != NULL)
     {
         cdata_bytes = (int)(s->end - s->p);
         error = yami_decoder_decode(hdhrd->yami, s->p, cdata_bytes);
-        //printf("tmpegts_video_cb: cdata_bytes %d yami_decoder_decode "
-        //       "rv %d\n", cdata_bytes, error);
+        LOGLN10((LOG_DEBUG, LOGS "cdata_bytes %d yami_decoder_decode "
+               "rv %d", LOGP, cdata_bytes, error));
         if (error == 0)
         {
             error = yami_decoder_get_fd_dst(hdhrd->yami, 0, 0, 0, 0, 0, 0);
-            //printf("tmpegts_video_cb: yami_decoder_get_fd_dst rv %d\n",
-            //       error);
+            LOGLN10((LOG_DEBUG, LOGS "yami_decoder_get_fd_dst rv %d",
+                     LOGP, error));
             if (error == 0)
             {
             }
             else
             {
-                printf("tmpegts_video_cb: yami_decoder_get_fd_dst "
-                       "failed rv %d\n", error);
+                LOGLN0((LOG_ERROR, LOGS "yami_decoder_get_fd_dst failed rv %d",
+                        LOGP, error));
             }
         }
         else
         {
-            printf("tmpegts_video_cb: yami_decoder_decode "
-                   "failed rv %d\n", error);
+            LOGLN0((LOG_ERROR, LOGS "yami_decoder_decode failed rv %d",
+                    LOGP, error));
         }
     }
     return 0;
@@ -252,13 +200,8 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
 
     hdhrd = (struct hdhrd_info*)udata;
 
-    //printf("tmpegts_audio_cb: bytes %10.10d flags0 0x%8.8x\n",
-    //       (int)(pi->s->end - pi->s->data), pi->flags0);
-    //hex_dump(pi->s->data, 32);
-    //if (pi->flags0 & 1)
-    //{
-    //    printf("tmpegts_audio_cb: pcr 0x%10.10u\n", pi->pcr);
-    //}
+    LOGLN10((LOG_DEBUG, LOGS "bytes %10.10d flags0 0x%8.8x",
+             LOGP, (int)(pi->s->end - pi->s->data), pi->flags0));
     s = pi->s;
     pts = 0;
     dts = 0;
@@ -267,10 +210,8 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
-    //printf("tmpegts_audio_cb: error %d pts %10.10u dts %10.10u "
-    //       "pdu_bytes %d\n", error, pts, dts, pdu_bytes);
-    //hex_dump(pi->s->p, 32);
-    //return 0;
+    LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
+             "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
     while (s_check_rem(s, 5))
     {
         cdata_bytes = (int)(s->end - s->p);
@@ -297,26 +238,33 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
             //printf("tmpegts_audio_cb: channels %d bytes %d\n",
             //       channels, bytes);
             out_s = (struct stream*)calloc(1, sizeof(struct stream));
-            out_s->data = (char*)malloc(bytes + 1024);
-            out_s->p = out_s->data;
-            out_uint32_le(out_s, 2);
-            out_uint32_le(out_s, 24 + bytes);
-            out_uint32_le(out_s, pts);
-            out_uint32_le(out_s, dts);
-            out_uint32_le(out_s, channels);
-            out_uint32_le(out_s, bytes);
-            error = hdhrd_ac3_get_frame_data(hdhrd->ac3, out_s->p, bytes);
-            if (error != 0)
+            if (out_s != NULL)
             {
-                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_data "
-                       "failed %d\n", error);
+                out_s->data = (char*)malloc(bytes + 1024);
+                if (out_s->data != NULL)
+                {
+                    out_s->p = out_s->data;
+                    out_uint32_le(out_s, 2);
+                    out_uint32_le(out_s, 24 + bytes);
+                    out_uint32_le(out_s, pts);
+                    out_uint32_le(out_s, dts);
+                    out_uint32_le(out_s, channels);
+                    out_uint32_le(out_s, bytes);
+                    error = hdhrd_ac3_get_frame_data(hdhrd->ac3, out_s->p,
+                                                     bytes);
+                    if (error != 0)
+                    {
+                        printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_data "
+                               "failed %d\n", error);
+                    }
+                    out_s->p += bytes;
+                    out_s->end = out_s->p;
+                    out_s->p = out_s->data;
+                    hdhrd_peer_send_all(hdhrd, out_s);
+                    free(out_s->data);
+                }
+                free(out_s);
             }
-            out_s->p += bytes;
-            out_s->end = out_s->p;
-            out_s->p = out_s->data;
-            hdhrd_peer_send_all(hdhrd, out_s);
-            free(out_s->data);
-            free(out_s);
         }
     }
     return 0;
@@ -527,6 +475,39 @@ sig_pipe(int sig)
 }
 
 /*****************************************************************************/
+static int
+process_args(int argc, char** argv, struct settings_info* setting)
+{
+    int index;
+
+    for (index = 1; index < argc; index++)
+    {
+        if (strcmp("-c", argv[index]) == 0)
+        {
+            strncpy(setting->hdhrd_channel_name, argv[index + 1], 256);
+        }
+        else if (strcmp("-p", argv[index]) == 0)
+        {
+            strncpy(setting->hdhrd_program_name, argv[index + 1], 256);
+        }
+        else
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/*****************************************************************************/
+static int
+printf_help(int argc, char** argv)
+{
+    (void)argc;
+    (void)argv;
+    return 0;
+}
+
+/*****************************************************************************/
 /* FD_SETSIZE */
 int
 main(int argc, char** argv)
@@ -549,74 +530,100 @@ main(int argc, char** argv)
     fd_set wfds;
     struct timeval time;
     int sck;
-    char hdhrd_uds[256];
+    struct settings_info* settings;
 
-    (void)argc;
-    (void)argv;
-
-    hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
-    if (hdhrd == NULL)
+    settings = (struct settings_info*)calloc(1, sizeof(struct settings_info));
+    if (settings == NULL)
     {
         printf("main: calloc failed\n");
         return 1;
     }
+    if (process_args(argc, argv, settings) != 0)
+    {
+        printf_help(argc, argv);
+        free(settings);
+        return 0;
+    }
+    hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
+    if (hdhrd == NULL)
+    {
+        printf("main: calloc failed\n");
+        free(settings);
+        return 1;
+    }
     signal(SIGINT, sig_int);
     signal(SIGPIPE, sig_pipe);
-
     hdhrd->yami_fd = open("/dev/dri/renderD128", O_RDWR);
     if (hdhrd->yami_fd == -1)
     {
         printf("main: open /dev/dri/renderD128 failed\n");
+        free(settings);
+        free(hdhrd);
         return 1;
     }
     error = yami_init(YI_TYPE_DRM, (void*)(long)(hdhrd->yami_fd));
-    printf("main: yami_init rv %d\n", error);
+    LOGLN0((LOG_INFO, LOGS "yami_init rv %d", LOGP, error));
     if (error != 0)
     {
         printf("main: yami_init failed %d\n", error);
     }
 
     //snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
-    snprintf(hdhrd_uds, 255, HDHRD_UDS, 0);
-    unlink(hdhrd_uds);
+    snprintf(settings->hdhrd_uds, 255, HDHRD_UDS, 0);
+    unlink(settings->hdhrd_uds);
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
     if (hdhrd->listener == -1)
     {
         printf("main: socket failed\n");
+        free(settings);
+        free(hdhrd);
         return 1;
     }
     memset(&s, 0, sizeof(struct sockaddr_un));
     s.sun_family = AF_UNIX;
-    strncpy(s.sun_path, hdhrd_uds, sizeof(s.sun_path));
+    strncpy(s.sun_path, settings->hdhrd_uds, sizeof(s.sun_path));
     s.sun_path[sizeof(s.sun_path) - 1] = 0;
     sock_len = sizeof(struct sockaddr_un);
     error = bind(hdhrd->listener, (struct sockaddr*)&s, sock_len);
     if (error != 0)
     {
         printf("main: bind error\n");
+        close(hdhrd->listener);
+        free(settings);
+        free(hdhrd);
         return 1;
     }
     error = listen(hdhrd->listener, 2);
     if (error != 0)
     {
         printf("main: listen error\n");
+        close(hdhrd->listener);
+        free(settings);
+        free(hdhrd);
         return 1;
     }
-    printf("main: listen ok socket %d uds %s\n", hdhrd->listener, hdhrd_uds);
+    printf("main: listen ok socket %d uds %s\n",
+           hdhrd->listener, settings->hdhrd_uds);
     hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
     if (hdhr == NULL)
     {
         printf("main: hdhomerun_device_create_from_str failed\n");
+        close(hdhrd->listener);
+        free(settings);
+        free(hdhrd);
         return 1;
     }
     dev_name = hdhomerun_device_get_name(hdhr);
     printf("main: hdhomerun_device_get_name returns %s\n", dev_name);
 
-    //hdhomerun_device_set_tuner_channel(hdhr, "44");
-    //hdhomerun_device_set_tuner_program(hdhr, "3");
-
-    //hdhomerun_device_set_tuner_channel(hdhr, "45");
-    //hdhomerun_device_set_tuner_program(hdhr, "1");
+    if (settings->hdhrd_channel_name[0] != 0)
+    {
+        hdhomerun_device_set_tuner_channel(hdhr, settings->hdhrd_channel_name);
+    }
+    if (settings->hdhrd_program_name[0] != 0)
+    {
+        hdhomerun_device_set_tuner_program(hdhr, settings->hdhrd_program_name);
+    }
 
     error = hdhomerun_device_stream_start(hdhr);
     printf("main: hdhomerun_device_stream_start returns %d\n", error);
@@ -731,6 +738,7 @@ main(int argc, char** argv)
     hdhrd_ac3_delete(hdhrd->ac3);
     hdhrd_peer_cleanup(hdhrd);
     free(hdhrd);
-    unlink(hdhrd_uds);
+    unlink(settings->hdhrd_uds);
+    free(settings);
     return 0;
 }

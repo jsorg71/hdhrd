@@ -56,7 +56,7 @@ struct pid_info
     int flags0;
     int flags1;
     int pcr;
-    int pad0;
+    int continuity_counter;
 };
 
 typedef int (*tmpegts_cb_proc)(struct pid_info* pi, void* udata);

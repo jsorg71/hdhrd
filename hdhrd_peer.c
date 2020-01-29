@@ -31,6 +31,7 @@
 #include "mpeg_ts.h"
 #include "hdhrd.h"
 #include "hdhrd_peer.h"
+#include "hdhrd_log.h"
 
 struct peer_info
 {
@@ -130,8 +131,8 @@ hdhrd_peer_process_msg(struct hdhrd_info* hdhrd, struct peer_info* peer)
     in_s = peer->in_s;
     in_uint32_le(in_s, pdu_code);
     in_uint32_le(in_s, pdu_bytes);
-    printf("hdhrd_peer_process_msg: sck %d pdu_code %d pdu_bytes %d\n",
-           peer->sck, pdu_code, pdu_bytes);
+    LOGLN0((LOG_INFO, LOGS "sck %d pdu_code %d pdu_bytes %d",
+            LOGP, peer->sck, pdu_code, pdu_bytes));
     return 0;
 }
 
@@ -210,8 +211,9 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
             if (reed < 1)
             {
                 /* error */
-                printf("hdhrd_peer_check_fds: recv failed sck %d reed %d\n",
-                       peer->sck, reed);
+                LOGLN0((LOG_ERROR, LOGS "recv failed sck %d reed %d",
+                        LOGP, peer->sck, reed));
+
                 hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
                 continue;
             }
@@ -228,8 +230,8 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                         in_uint32_le(in_s, pdu_bytes);
                         if ((pdu_bytes < 8) || (pdu_bytes > in_s->size))
                         {
-                            printf("hdhrd_peer_check_fds: bad pdu_bytes %d\n",
-                                   pdu_bytes);
+                            LOGLN0((LOG_ERROR, LOGS "bad pdu_bytes %d",
+                                    LOGP, pdu_bytes));
                             hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
                             continue;
                         }
@@ -241,8 +243,8 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                         in_s->p = in_s->data;
                         if (hdhrd_peer_process_msg(hdhrd, peer) != 0)
                         {
-                            printf("hdhrd_peer_check_fds: "
-                                   "hdhrd_peer_process_msg failed\n");
+                            LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_process_msg "
+                                   "failed", LOGP));
                             hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
                             continue;
                         }
@@ -261,13 +263,13 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                 if (sent < 1)
                 {
                     /* error */
-                    printf("hdhrd_peer_check_fds: send failed\n");
+                    LOGLN0((LOG_ERROR, LOGS "failed failed", LOGP));
                     hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
                     continue;
                 }
                 else
                 {
-                    //printf("hdhrd_peer_check_fds: send ok, sent %d\n", sent);
+                    LOGLN10((LOG_DEBUG, LOGS "send ok, sent %d", LOGP, sent));
                     out_s->p += sent;
                     if (out_s->p >= out_s->end)
                     {

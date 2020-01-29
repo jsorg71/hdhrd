@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include "mpeg_ts.h"
+#include "hdhrd_log.h"
 
 /*****************************************************************************/
 static int
@@ -84,9 +85,9 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                         error = (cb->procs[index])(pi, udata);
                         if (error != 0)
                         {
-                            printf("process_pid: cb for "
-                                   "pid %d returned %d\n", mpegts->pid,
-                                   error);
+                            LOGLN0((LOG_ERROR, LOGS "cb for pid %d "
+                                    "returned %d", LOGP, mpegts->pid,
+                                    error));
                             return 10;
                         }
                     }
@@ -101,7 +102,18 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
             {
                 if (s != NULL)
                 {
-                    if (!s_check_rem_out(s, cb_bytes))
+                    if ((s->end > s->data) &&
+                        (mpegts->continuity_counter !=
+                         ((pi->continuity_counter + 1) & 0xF)))
+                    {
+                        LOGLN0((LOG_ERROR, LOGS "continuity_counter mismatch",
+                                LOGP));
+                        /* maybe lost one */
+                        free(s->data);
+                        free(s);
+                        pi->s = NULL;
+                    }
+                    else if (!s_check_rem_out(s, cb_bytes))
                     {
                         /* not enough space for new data */
                         return 6;
@@ -110,6 +122,7 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                     {
                         out_uint8a(s, in_s->p, cb_bytes);
                         s->end = s->p;
+                        pi->continuity_counter = mpegts->continuity_counter;
                     }
                 }
             }
@@ -117,7 +130,7 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
             {
                 pi->flags0 |= FLAGS0_PCR_VALID;
                 read_pcr(mpegts->ppcr, &(pi->pcr));
-                //printf("pcr %10.10u\n", pi->pcr);
+                LOGLN10((LOG_INFO, LOGS "pcr %10.10u", LOGP, pi->pcr));
             }
             if (mpegts->random_access_indicator)
             {
