@@ -218,12 +218,13 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
         decoded = 0;
         error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
                                  &cdata_bytes_processed, &decoded);
-        //printf("tmpegts_audio_cb: error %d cdata_bytes %d "
-        //       "cdata_bytes_processed %d decoded %d\n",
-        //       error, cdata_bytes, cdata_bytes_processed, decoded);
+        LOGLN10((LOG_DEBUG, LOGS "error %d cdata_bytes %d "
+                 "cdata_bytes_processed %d decoded %d",
+                 LOGP, error, cdata_bytes, cdata_bytes_processed, decoded));
         if (error != 0)
         {
-            printf("tmpegts_audio_cb: hdhrd_ac3_decode failed\n");
+            LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_decode "
+                    "failed %d", LOGP, error));
             break;
         }
         s->p += cdata_bytes_processed;
@@ -232,11 +233,11 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
             error = hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels, &bytes);
             if (error != 0)
             {
-                printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_info "
-                       "failed %d\n", error);
+                LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_info "
+                        "failed %d", LOGP, error));
             }
-            //printf("tmpegts_audio_cb: channels %d bytes %d\n",
-            //       channels, bytes);
+            LOGLN10((LOG_DEBUG, LOGS "channels %d bytes %d",
+                     LOGP, channels, bytes));
             out_s = (struct stream*)calloc(1, sizeof(struct stream));
             if (out_s != NULL)
             {
@@ -254,8 +255,8 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
                                                      bytes);
                     if (error != 0)
                     {
-                        printf("tmpegts_audio_cb: hdhrd_ac3_get_frame_data "
-                               "failed %d\n", error);
+                        LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_data "
+                                "failed %d", LOGP, error));
                     }
                     out_s->p += bytes;
                     out_s->end = out_s->p;
@@ -287,8 +288,8 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     struct hdhrd_info* hdhrd;
     struct stream* s;
 
-    //printf("tmpegts_program_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    LOGLN10((LOG_INFO, LOGS "bytes %d", LOGP,
+             (int)(pi->s->end - pi->s->data)));
     hdhrd = (struct hdhrd_info*)udata;
     s = pi->s;
     if (!s_check_rem(s, 1))
@@ -306,7 +307,7 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     }
     in_uint8s(s, pointer_field);
     in_uint8(s, table_id);
-    //printf("tmpegts_program_cb: table_id %d\n", table_id);
+    LOGLN10((LOG_INFO, LOGS "table_id %d", LOGP, table_id));
     if (table_id != 2)
     {
         return 4;
@@ -317,7 +318,7 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     {
         return 5;
     }
-    //printf("tmpegts_program_cb: section_length %d\n", section_length);
+    LOGLN10((LOG_INFO, LOGS "section_length %d", LOGP, section_length));
     if (hdhrd->cb.num_pids != 2)
     {
         return 0;
@@ -347,10 +348,9 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
             elementary_pid = packed_bits & 0x1FFF;
             in_uint16_be(s, packed_bits);
             es_info_length = packed_bits & 0x03FF;
-            printf("tmpegts_program_cb: found stream_type 0x%4.4x "
-                   "elementary_pid 0x%4.4x es_info_length %d\n",
-                   stream_type, elementary_pid, es_info_length);
-            //hex_dump(pi->s->p, es_info_length); 
+            LOGLN0((LOG_INFO, LOGS "found stream_type 0x%4.4x "
+                    "elementary_pid 0x%4.4x es_info_length %d",
+                    LOGP, stream_type, elementary_pid, es_info_length));
             in_uint8s(s, es_info_length);
             if ((stream_type == 0x02) && (video_pid == 0)) /* mpeg2 */
             {
@@ -363,10 +363,10 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
         }
         if ((video_pid != 0) && (audio_pid != 0))
         {
-            printf("tmpegts_program_cb: adding video pid 0x%4.4x\n", video_pid);
+            LOGLN0((LOG_INFO, LOGS "adding video pid 0x%4.4x", LOGP, video_pid));
             hdhrd->cb.pids[2] = video_pid;
             hdhrd->cb.procs[2] = tmpegts_video_cb;
-            printf("tmpegts_program_cb: adding audio pid 0x%4.4x\n", audio_pid);
+            LOGLN0((LOG_INFO, LOGS "adding audio pid 0x%4.4x", LOGP, audio_pid));
             hdhrd->cb.pids[3] = audio_pid;
             hdhrd->cb.procs[3] = tmpegts_audio_cb;
             hdhrd->cb.num_pids = 4;
@@ -390,8 +390,8 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     int pmt_pid;
     struct stream* s;
 
-    //printf("tmpegts_pid0_cb: bytes %d\n", (int)(pi->s->end - pi->s->data));
-    //hex_dump(pi->s->data, pi->s->end - pi->s->data);
+    LOGLN10((LOG_INFO, LOGS "bytes %d", LOGP,
+             (int)(pi->s->end - pi->s->data)));
     hdhrd = (struct hdhrd_info*)udata;
     s = pi->s;
     if (!s_check_rem(s, 1))
@@ -409,7 +409,7 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     }
     in_uint8s(s, pointer_field);
     in_uint8(s, table_id);
-    //printf("tmpegts_pid0_cb: table_id %d\n", table_id);
+    LOGLN10((LOG_INFO, LOGS "table_id %d", LOGP, table_id));
     if (table_id != 0)
     {
         return 4;
@@ -420,8 +420,7 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     {
         return 5;
     }
-    //printf("tmpegts_pid0_cb: section_length %d\n", section_length);
-    //hex_dump(s->p, section_length);
+    LOGLN10((LOG_INFO, LOGS "ection_length %d", LOGP, section_length));
     if (hdhrd->cb.num_pids != 1)
     {
         return 0;
@@ -444,13 +443,14 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
             {
                 pmt_pid = program_map_pid;
             }
-            printf("tmpegts_pid0_cb: found program_num 0x%4.4x "
-                   "program_map_pid 0x%4.4x\n",
-                   program_num, program_map_pid);
+            LOGLN0((LOG_INFO, LOGS "found program_num 0x%4.4x "
+                    "program_map_pid 0x%4.4x", LOGP,
+                    program_num, program_map_pid));
         }
         if (pmt_pid != 0)
         {
-            printf("tmpegts_pid0_cb: adding program pid 0x%4.4x\n", pmt_pid);
+            LOGLN0((LOG_INFO, LOGS "adding program pid 0x%4.4x",
+                    LOGP, pmt_pid));
             hdhrd->cb.pids[1] = pmt_pid;
             hdhrd->cb.procs[1] = tmpegts_program_cb;
             hdhrd->cb.num_pids = 2;
@@ -484,11 +484,13 @@ process_args(int argc, char** argv, struct settings_info* setting)
     {
         if (strcmp("-c", argv[index]) == 0)
         {
-            strncpy(setting->hdhrd_channel_name, argv[index + 1], 256);
+            index++;
+            strncpy(setting->hdhrd_channel_name, argv[index], 255);
         }
         else if (strcmp("-p", argv[index]) == 0)
         {
-            strncpy(setting->hdhrd_program_name, argv[index + 1], 256);
+            index++;
+            strncpy(setting->hdhrd_program_name, argv[index], 255);
         }
         else
         {
@@ -535,7 +537,7 @@ main(int argc, char** argv)
     settings = (struct settings_info*)calloc(1, sizeof(struct settings_info));
     if (settings == NULL)
     {
-        printf("main: calloc failed\n");
+        LOGLN0((LOG_ERROR, LOGS "calloc failed", LOGP));
         return 1;
     }
     if (process_args(argc, argv, settings) != 0)
@@ -547,7 +549,7 @@ main(int argc, char** argv)
     hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
     if (hdhrd == NULL)
     {
-        printf("main: calloc failed\n");
+        LOGLN0((LOG_ERROR, LOGS "calloc failed", LOGP));
         free(settings);
         return 1;
     }
@@ -556,7 +558,7 @@ main(int argc, char** argv)
     hdhrd->yami_fd = open("/dev/dri/renderD128", O_RDWR);
     if (hdhrd->yami_fd == -1)
     {
-        printf("main: open /dev/dri/renderD128 failed\n");
+        LOGLN0((LOG_ERROR, LOGS "open /dev/dri/renderD128 failed", LOGP));
         free(settings);
         free(hdhrd);
         return 1;
@@ -565,7 +567,7 @@ main(int argc, char** argv)
     LOGLN0((LOG_INFO, LOGS "yami_init rv %d", LOGP, error));
     if (error != 0)
     {
-        printf("main: yami_init failed %d\n", error);
+        LOGLN0((LOG_ERROR, LOGS "yami_init failed %d", LOGP, error));
     }
 
     //snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
@@ -574,7 +576,7 @@ main(int argc, char** argv)
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
     if (hdhrd->listener == -1)
     {
-        printf("main: socket failed\n");
+        LOGLN0((LOG_ERROR, LOGS "socket failed", LOGP));
         free(settings);
         free(hdhrd);
         return 1;
@@ -587,7 +589,7 @@ main(int argc, char** argv)
     error = bind(hdhrd->listener, (struct sockaddr*)&s, sock_len);
     if (error != 0)
     {
-        printf("main: bind error\n");
+        LOGLN0((LOG_ERROR, LOGS "bind failed", LOGP));
         close(hdhrd->listener);
         free(settings);
         free(hdhrd);
@@ -596,26 +598,27 @@ main(int argc, char** argv)
     error = listen(hdhrd->listener, 2);
     if (error != 0)
     {
-        printf("main: listen error\n");
+        LOGLN0((LOG_ERROR, LOGS "listen failed", LOGP));
         close(hdhrd->listener);
         free(settings);
         free(hdhrd);
         return 1;
     }
-    printf("main: listen ok socket %d uds %s\n",
-           hdhrd->listener, settings->hdhrd_uds);
+    LOGLN0((LOG_INFO, LOGS "listen ok socket %d uds %s",
+            LOGP, hdhrd->listener, settings->hdhrd_uds));
     hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
     if (hdhr == NULL)
     {
-        printf("main: hdhomerun_device_create_from_str failed\n");
+        LOGLN0((LOG_ERROR, LOGS "hdhomerun_device_create_from_str failed",
+                LOGP));
         close(hdhrd->listener);
         free(settings);
         free(hdhrd);
         return 1;
     }
     dev_name = hdhomerun_device_get_name(hdhr);
-    printf("main: hdhomerun_device_get_name returns %s\n", dev_name);
-
+    LOGLN0((LOG_INFO, LOGS "hdhomerun_device_get_name returns %s",
+            LOGP, dev_name));
     if (settings->hdhrd_channel_name[0] != 0)
     {
         hdhomerun_device_set_tuner_channel(hdhr, settings->hdhrd_channel_name);
@@ -624,40 +627,41 @@ main(int argc, char** argv)
     {
         hdhomerun_device_set_tuner_program(hdhr, settings->hdhrd_program_name);
     }
-
     error = hdhomerun_device_stream_start(hdhr);
-    printf("main: hdhomerun_device_stream_start returns %d\n", error);
+    LOGLN0((LOG_INFO, LOGS "hdhomerun_device_stream_start returns %d",
+            LOGP, error));
     if (error == 1)
     {
-        printf("main: adding main pid 0x%4.4x\n", 0);
+        LOGLN0((LOG_INFO, LOGS "adding main pid 0x%4.4x", LOGP, 0));
         hdhrd->cb.pids[0] = 0;
         hdhrd->cb.procs[0] = tmpegts_pid0_cb;
         hdhrd->cb.num_pids = 1;
         if (hdhrd_ac3_create(&(hdhrd->ac3)) != 0)
         {
-            printf("main: hdhrd_ac3_create failed\n");
+            LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_create failed", LOGP));
         }
         for (;;)
         {
             if (g_term)
             {
-                printf("main: g_term set\n");
+                LOGLN0((LOG_INFO, LOGS "g_term set", LOGP));
                 break;
             }
             if (get_mstime(&start_time) != 0)
             {
-                printf("main: get_mstime failed\n");
+                LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
                 break;
             }
             bytes = HDHRD_BUFFER_SIZE;
             data = hdhomerun_device_stream_recv(hdhr, bytes, &bytes);
-            //printf("main: data %p HDHRD_BUFFER_SIZE %d, bytes %ld\n",
-            //       data, HDHRD_BUFFER_SIZE, bytes);
+            LOGLN10((LOG_ERROR, LOGS "data %p HDHRD_BUFFER_SIZE %d, bytes %ld",
+                     LOGP, data, HDHRD_BUFFER_SIZE, bytes));
             error = 0;
             while ((error == 0) && (bytes > 3))
             {
                 if (g_term)
                 {
+                    LOGLN0((LOG_INFO, LOGS "g_term set", LOGP));
                     break;
                 }
                 lbytes = bytes;
@@ -672,7 +676,8 @@ main(int argc, char** argv)
             }
             if (error != 0)
             {
-                printf("main: process_mpeg_ts_packet returned %d\n", error);
+                LOGLN0((LOG_ERROR, LOGS "process_mpeg_ts_packet returned %d",
+                        LOGP, error));
             }
             for (;;)
             {
@@ -682,7 +687,7 @@ main(int argc, char** argv)
                 }
                 if (get_mstime(&now) != 0)
                 {
-                    printf("main: get_mstime failed\n");
+                    LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
                     break;
                 }
                 diff_time = now - start_time;
@@ -696,14 +701,15 @@ main(int argc, char** argv)
                 FD_SET(hdhrd->listener, &rfds);
                 if (hdhrd_peer_get_fds(hdhrd, &max_fd, &rfds, &wfds) != 0)
                 {
-                    printf("main: hdhrd_peer_get_fds failed\n");
+                    LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_get_fds "
+                            "failed", LOGP));
                 }
                 millis = HDHRD_SELECT_MSTIME - diff_time;
                 if (millis < 1)
                 {
                     millis = 1;
                 }
-                //printf("millis %d\n", millis);
+                LOGLN10((LOG_INFO, LOGS "millis %d", LOGP, millis));
                 time.tv_sec = millis / 1000;
                 time.tv_usec = (millis * 1000) % 1000000;
                 error = select(max_fd + 1, &rfds, &wfds, 0, &time);
@@ -714,19 +720,22 @@ main(int argc, char** argv)
                         sock_len = sizeof(struct sockaddr_un);
                         sck = accept(hdhrd->listener, (struct sockaddr*)&s,
                                      &sock_len);
-                        printf("main: got connection sck %d\n", sck);
+                        LOGLN0((LOG_INFO, LOGS "got connection sck %d",
+                                LOGP, sck));
                         if (sck != -1)
                         {
                             if (hdhrd_peer_add_fd(hdhrd, sck) != 0)
                             {
-                                printf("main: hdhrd_peer_add_fd failed\n");
+                                LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_add_fd "
+                                        "failed", LOGP));
                                 close(sck);
                             }
                         }
                     }
                     if (hdhrd_peer_check_fds(hdhrd, &rfds, &wfds) != 0)
                     {
-                        printf("main: hdhrd_peer_check_fds failed\n");
+                        LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_check_fds "
+                                "failed", LOGP));
                     }
                 }
             }
