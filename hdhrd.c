@@ -212,59 +212,69 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     }
     LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
              "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
-    while (s_check_rem(s, 5))
+    if (hdhrd->ac3 == NULL)
     {
-        cdata_bytes = (int)(s->end - s->p);
-        decoded = 0;
-        error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
-                                 &cdata_bytes_processed, &decoded);
-        LOGLN10((LOG_DEBUG, LOGS "error %d cdata_bytes %d "
-                 "cdata_bytes_processed %d decoded %d",
-                 LOGP, error, cdata_bytes, cdata_bytes_processed, decoded));
-        if (error != 0)
+        error = hdhrd_ac3_create(&(hdhrd->ac3));
+        LOGLN0((LOG_INFO, LOGS "hdhrd_ac3_create rv %d", LOGP, error));
+    }
+    if (hdhrd->ac3 != NULL)
+    {
+        while (s_check_rem(s, 5))
         {
-            LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_decode "
-                    "failed %d", LOGP, error));
-            break;
-        }
-        s->p += cdata_bytes_processed;
-        if (decoded)
-        {
-            error = hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels, &bytes);
+            cdata_bytes = (int)(s->end - s->p);
+            decoded = 0;
+            error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
+                                     &cdata_bytes_processed, &decoded);
+            LOGLN10((LOG_DEBUG, LOGS "error %d cdata_bytes %d "
+                     "cdata_bytes_processed %d decoded %d",
+                     LOGP, error, cdata_bytes, cdata_bytes_processed,
+                     decoded));
             if (error != 0)
             {
-                LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_info "
+                LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_decode "
                         "failed %d", LOGP, error));
+                break;
             }
-            LOGLN10((LOG_DEBUG, LOGS "channels %d bytes %d",
-                     LOGP, channels, bytes));
-            out_s = (struct stream*)calloc(1, sizeof(struct stream));
-            if (out_s != NULL)
+            s->p += cdata_bytes_processed;
+            if (decoded)
             {
-                out_s->data = (char*)malloc(bytes + 1024);
-                if (out_s->data != NULL)
+                error = hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels,
+                                                 &bytes);
+                if (error != 0)
                 {
-                    out_s->p = out_s->data;
-                    out_uint32_le(out_s, 2);
-                    out_uint32_le(out_s, 24 + bytes);
-                    out_uint32_le(out_s, pts);
-                    out_uint32_le(out_s, dts);
-                    out_uint32_le(out_s, channels);
-                    out_uint32_le(out_s, bytes);
-                    error = hdhrd_ac3_get_frame_data(hdhrd->ac3, out_s->p,
-                                                     bytes);
-                    if (error != 0)
-                    {
-                        LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_data "
-                                "failed %d", LOGP, error));
-                    }
-                    out_s->p += bytes;
-                    out_s->end = out_s->p;
-                    out_s->p = out_s->data;
-                    hdhrd_peer_send_all(hdhrd, out_s);
-                    free(out_s->data);
+                    LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_info "
+                            "failed %d", LOGP, error));
                 }
-                free(out_s);
+                LOGLN10((LOG_DEBUG, LOGS "channels %d bytes %d",
+                         LOGP, channels, bytes));
+                out_s = (struct stream*)calloc(1, sizeof(struct stream));
+                if (out_s != NULL)
+                {
+                    out_s->data = (char*)malloc(bytes + 1024);
+                    if (out_s->data != NULL)
+                    {
+                        out_s->p = out_s->data;
+                        out_uint32_le(out_s, 2);
+                        out_uint32_le(out_s, 24 + bytes);
+                        out_uint32_le(out_s, pts);
+                        out_uint32_le(out_s, dts);
+                        out_uint32_le(out_s, channels);
+                        out_uint32_le(out_s, bytes);
+                        error = hdhrd_ac3_get_frame_data(hdhrd->ac3, out_s->p,
+                                                         bytes);
+                        if (error != 0)
+                        {
+                            LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_data "
+                                    "failed %d", LOGP, error));
+                        }
+                        out_s->p += bytes;
+                        out_s->end = out_s->p;
+                        out_s->p = out_s->data;
+                        hdhrd_peer_send_all(hdhrd, out_s);
+                        free(out_s->data);
+                    }
+                    free(out_s);
+                }
             }
         }
     }
@@ -323,7 +333,6 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
-
     s->end = s->p + section_length;
     if (packed_bits & 0x8000) /* section_syntax_indicator */
     {
@@ -636,10 +645,6 @@ main(int argc, char** argv)
         hdhrd->cb.pids[0] = 0;
         hdhrd->cb.procs[0] = tmpegts_pid0_cb;
         hdhrd->cb.num_pids = 1;
-        if (hdhrd_ac3_create(&(hdhrd->ac3)) != 0)
-        {
-            LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_create failed", LOGP));
-        }
         for (;;)
         {
             if (g_term)
@@ -745,9 +750,11 @@ main(int argc, char** argv)
     mpeg_ts_cleanup(&(hdhrd->cb));
     close(hdhrd->listener);
     hdhrd_ac3_delete(hdhrd->ac3);
+    yami_decoder_delete(hdhrd->yami);
     hdhrd_peer_cleanup(hdhrd);
     free(hdhrd);
     unlink(settings->hdhrd_uds);
     free(settings);
+    yami_deinit();
     return 0;
 }
