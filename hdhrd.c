@@ -747,14 +747,15 @@ main(int argc, char** argv)
         }
     }
     hdhomerun_device_destroy(hdhr);
-    mpeg_ts_cleanup(&(hdhrd->cb));
     close(hdhrd->listener);
-    hdhrd_ac3_delete(hdhrd->ac3);
-    yami_decoder_delete(hdhrd->yami);
-    hdhrd_peer_cleanup(hdhrd);
-    free(hdhrd);
     unlink(settings->hdhrd_uds);
-    free(settings);
+    mpeg_ts_cleanup(&(hdhrd->cb));
+    hdhrd_ac3_delete(hdhrd->ac3);
+    hdhrd_peer_cleanup(hdhrd);
+    yami_decoder_delete(hdhrd->yami);
     yami_deinit();
+    close(hdhrd->yami_fd);
+    free(hdhrd);
+    free(settings);
     return 0;
 }
