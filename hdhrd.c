@@ -132,6 +132,12 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     int pdu_bytes;
     struct stream* s;
     struct hdhrd_info* hdhrd;
+    int fd;
+    int fd_width;
+    int fd_height;
+    int fd_stride;
+    int fd_size;
+    int fd_bpp;
 
     hdhrd = (struct hdhrd_info*)udata;
     LOGLN10((LOG_DEBUG, LOGS "bytes %10.10d flags0 0x%8.8x", LOGP,
@@ -160,11 +166,16 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
                "rv %d", LOGP, cdata_bytes, error));
         if (error == 0)
         {
-            error = yami_decoder_get_fd_dst(hdhrd->yami, 0, 0, 0, 0, 0, 0);
-            LOGLN10((LOG_DEBUG, LOGS "yami_decoder_get_fd_dst rv %d",
-                     LOGP, error));
+            error = yami_decoder_get_fd_dst(hdhrd->yami, &fd, &fd_width,
+                                            &fd_height, &fd_stride,
+                                            &fd_size, &fd_bpp);
+            LOGLN10((LOG_DEBUG, LOGS "yami_decoder_get_fd_dst rv %d fd %d "
+                     "fd_width %d fd_height %d fd_stride %d fd_size %d "
+                     "fd_bpp %d", LOGP, error, fd, fd_width, fd_height,
+                     fd_stride, fd_size, fd_bpp));
             if (error == 0)
             {
+                close(fd);
             }
             else
             {

@@ -19,7 +19,7 @@
 #ifndef _HDHRD_H_
 #define _HDHRD_H_
 
-#define HDHRD_BUFFER_SIZE (256 * 1024)
+#define HDHRD_BUFFER_SIZE (1024 * 1024)
 #define HDHRD_SELECT_MSTIME 15
 #define HDHRD_UDS "/tmp/wtv_hdhrd%d"
 
