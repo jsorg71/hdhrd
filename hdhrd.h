@@ -32,6 +32,12 @@ struct hdhrd_info
     void* yami;
     struct peer_info* peer_head;
     struct peer_info* peer_tail;
+    int fd;
+    int fd_width;
+    int fd_height;
+    int fd_stride;
+    int fd_size;
+    int fd_bpp;
 };
 
 int
