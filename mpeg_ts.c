@@ -106,8 +106,8 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                         (mpegts->continuity_counter !=
                          ((pi->continuity_counter + 1) & 0xF)))
                     {
-                        LOGLN0((LOG_ERROR, LOGS "continuity_counter mismatch",
-                                LOGP));
+                        LOGLN0((LOG_ERROR, LOGS "continuity_counter mismatch "
+                                "pid %d", LOGP, mpegts->pid));
                         /* maybe lost one */
                         free(s->data);
                         free(s);
@@ -173,6 +173,8 @@ process_mpeg_ts_packet(const void* data, int bytes,
     }
     if (mpegts.transport_error_indicator)
     {
+        LOGLN0((LOG_ERROR, LOGS "transport_error_indicator set pid %d "
+                LOGP, mpegts.pid));
         return 2;
     }
     if (mpegts.scrambling_control != 0)
