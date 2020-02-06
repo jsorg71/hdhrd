@@ -19,7 +19,7 @@
 #ifndef _HDHRD_H_
 #define _HDHRD_H_
 
-#define HDHRD_BUFFER_SIZE (1024 * 1024)
+#define HDHRD_BUFFER_SIZE (64 * 1024)
 #define HDHRD_SELECT_MSTIME 15
 #define HDHRD_UDS "/tmp/wtv_hdhrd%d"
 
@@ -32,6 +32,8 @@ struct hdhrd_info
     void* yami;
     struct peer_info* peer_head;
     struct peer_info* peer_tail;
+    int fd_pts;
+    int fd_dts;
     int fd;
     int fd_width;
     int fd_height;

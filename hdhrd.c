@@ -38,11 +38,12 @@
 #include "hdhrd_log.h"
 #include "hdhrd_utils.h"
 
-static volatile int g_term = 0;
+static int g_term_pipe[2];
 
 struct settings_info
 {
     char hdhrd_uds[256];
+    char hdhrd_device_name[256];
     char hdhrd_channel_name[256];
     char hdhrd_program_name[256];
 };
@@ -174,6 +175,8 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
                      hdhrd->fd_stride, hdhrd->fd_size, hdhrd->fd_bpp));
             if (error == 0)
             {
+                hdhrd->fd_pts = pts;
+                hdhrd->fd_dts = dts;
             }
             else
             {
@@ -228,7 +231,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     }
     if (hdhrd->ac3 != NULL)
     {
-        while (s_check_rem(s, 5))
+        while (s_check_rem(s, 8))
         {
             cdata_bytes = (int)(s->end - s->p);
             decoded = 0;
@@ -275,11 +278,14 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
                         {
                             LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_data "
                                     "failed %d", LOGP, error));
+                            free(out_s->data);
+                            free(out_s);
+                            return 0;
                         }
                         out_s->p += bytes;
                         out_s->end = out_s->p;
                         out_s->p = out_s->data;
-                        hdhrd_peer_send_all(hdhrd, out_s);
+                        hdhrd_peer_queue_all_audio(hdhrd, out_s);
                         free(out_s->data);
                     }
                     free(out_s);
@@ -482,7 +488,9 @@ static void
 sig_int(int sig)
 {
     (void)sig;
-    g_term = 1;
+    if (write(g_term_pipe[1], "sig", 4) != 4)
+    {
+    }
 }
 
 /*****************************************************************************/
@@ -504,6 +512,11 @@ process_args(int argc, char** argv, struct settings_info* setting)
         {
             index++;
             strncpy(setting->hdhrd_channel_name, argv[index], 255);
+        }
+        else if (strcmp("-d", argv[index]) == 0)
+        {
+            index++;
+            strncpy(setting->hdhrd_device_name, argv[index], 255);
         }
         else if (strcmp("-p", argv[index]) == 0)
         {
@@ -541,15 +554,16 @@ main(int argc, char** argv)
     int lbytes;
     int millis;
     int max_fd;
+    int sck;
+    int term;
+    int diff_time;
     unsigned int start_time;
     unsigned int now;
-    int diff_time;
     struct sockaddr_un s;
     socklen_t sock_len;
     fd_set rfds;
     fd_set wfds;
     struct timeval time;
-    int sck;
     struct settings_info* settings;
 
     settings = (struct settings_info*)calloc(1, sizeof(struct settings_info));
@@ -588,7 +602,7 @@ main(int argc, char** argv)
         LOGLN0((LOG_ERROR, LOGS "yami_init failed %d", LOGP, error));
     }
 
-    //snprintf(hdhrd_uds, 255, HDHRD_UDS, getpid());
+    //snprintf(settings->hdhrd_uds, 255, HDHRD_UDS, getpid());
     snprintf(settings->hdhrd_uds, 255, HDHRD_UDS, 0);
     unlink(settings->hdhrd_uds);
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
@@ -624,11 +638,27 @@ main(int argc, char** argv)
     }
     LOGLN0((LOG_INFO, LOGS "listen ok socket %d uds %s",
             LOGP, hdhrd->listener, settings->hdhrd_uds));
-    hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
+    if (settings->hdhrd_device_name[0] != 0)
+    {
+        hdhr = hdhomerun_device_create_from_str(settings->hdhrd_device_name, 0);
+    }
+    else
+    {
+        hdhr = hdhomerun_device_create_from_str("1020B660-0", 0);
+    }
     if (hdhr == NULL)
     {
         LOGLN0((LOG_ERROR, LOGS "hdhomerun_device_create_from_str failed",
                 LOGP));
+        close(hdhrd->listener);
+        free(settings);
+        free(hdhrd);
+        return 1;
+    }
+    if (pipe(g_term_pipe) != 0)
+    {
+        LOGLN0((LOG_ERROR, LOGS "pipe failed", LOGP));
+        hdhomerun_device_destroy(hdhr);
         close(hdhrd->listener);
         free(settings);
         free(hdhrd);
@@ -654,11 +684,12 @@ main(int argc, char** argv)
         hdhrd->cb.pids[0] = 0;
         hdhrd->cb.procs[0] = tmpegts_pid0_cb;
         hdhrd->cb.num_pids = 1;
+        term = 0;
         for (;;)
         {
-            if (g_term)
+            if (term)
             {
-                LOGLN0((LOG_INFO, LOGS "g_term set", LOGP));
+                LOGLN0((LOG_INFO, LOGS "term set", LOGP));
                 break;
             }
             if (get_mstime(&start_time) != 0)
@@ -668,51 +699,58 @@ main(int argc, char** argv)
             }
             bytes = HDHRD_BUFFER_SIZE;
             data = hdhomerun_device_stream_recv(hdhr, bytes, &bytes);
-            LOGLN10((LOG_ERROR, LOGS "data %p HDHRD_BUFFER_SIZE %d, bytes %ld",
+            LOGLN10((LOG_INFO, LOGS "data %p HDHRD_BUFFER_SIZE %d, bytes %ld",
                      LOGP, data, HDHRD_BUFFER_SIZE, bytes));
-            error = 0;
-            while ((error == 0) && (bytes > 3))
+            if (data == NULL)
             {
-                if (g_term)
-                {
-                    LOGLN0((LOG_INFO, LOGS "g_term set", LOGP));
-                    break;
-                }
-                lbytes = bytes;
-                if (lbytes > TS_PACKET_SIZE) /* 188 */
-                {
-                    lbytes = TS_PACKET_SIZE;
-                }
-                error = process_mpeg_ts_packet(data, lbytes, &(hdhrd->cb),
-                                               hdhrd);
-                data += lbytes;
-                bytes -= lbytes;
+                LOGLN10((LOG_INFO, LOGS "hdhomerun_device_stream_recv "
+                         "return nil", LOGP));
             }
-            if (error != 0)
+            else
             {
-                LOGLN0((LOG_ERROR, LOGS "process_mpeg_ts_packet returned %d",
-                        LOGP, error));
+                if (HDHRD_BUFFER_SIZE - bytes < 2 * 1024)
+                {
+                    LOGLN10((LOG_INFO, LOGS "hdhomerun_device_stream_recv might "
+                             "have missed data HDHRD_BUFFER_SIZE %d bytes %d",
+                             LOGP, HDHRD_BUFFER_SIZE, bytes));
+                }
+                error = 0;
+                while ((error == 0) && (bytes > 3))
+                {
+                    lbytes = bytes;
+                    if (lbytes > TS_PACKET_SIZE) /* 188 */
+                    {
+                        lbytes = TS_PACKET_SIZE;
+                    }
+                    error = process_mpeg_ts_packet(data, lbytes, &(hdhrd->cb),
+                                                   hdhrd);
+                    data += lbytes;
+                    bytes -= lbytes;
+                }
+                if (error != 0)
+                {
+                    LOGLN0((LOG_ERROR, LOGS "process_mpeg_ts_packet "
+                            "returned %d", LOGP, error));
+                }
             }
             for (;;)
             {
-                if (g_term)
-                {
-                    break;
-                }
                 if (get_mstime(&now) != 0)
                 {
                     LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
                     break;
                 }
                 diff_time = now - start_time;
-                if (diff_time >= HDHRD_SELECT_MSTIME)
-                {
-                    break;
-                }
+                LOGLN10((LOG_INFO, LOGS "diff_time %d", LOGP, diff_time));
                 max_fd = hdhrd->listener;
+                if (g_term_pipe[0] > max_fd)
+                {
+                    max_fd = g_term_pipe[0];
+                }
                 FD_ZERO(&rfds);
                 FD_ZERO(&wfds);
                 FD_SET(hdhrd->listener, &rfds);
+                FD_SET(g_term_pipe[0], &rfds);
                 if (hdhrd_peer_get_fds(hdhrd, &max_fd, &rfds, &wfds) != 0)
                 {
                     LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_get_fds "
@@ -721,7 +759,7 @@ main(int argc, char** argv)
                 millis = HDHRD_SELECT_MSTIME - diff_time;
                 if (millis < 1)
                 {
-                    millis = 1;
+                    millis = 0;
                 }
                 LOGLN10((LOG_INFO, LOGS "millis %d", LOGP, millis));
                 time.tv_sec = millis / 1000;
@@ -729,6 +767,12 @@ main(int argc, char** argv)
                 error = select(max_fd + 1, &rfds, &wfds, 0, &time);
                 if (error > 0)
                 {
+                    if (FD_ISSET(g_term_pipe[0], &rfds))
+                    {
+                        LOGLN0((LOG_INFO, LOGS "g_term_pipe set", LOGP));
+                        term = 1;
+                        break;
+                    }
                     if (FD_ISSET(hdhrd->listener, &rfds))
                     {
                         sock_len = sizeof(struct sockaddr_un);
@@ -752,6 +796,10 @@ main(int argc, char** argv)
                                 "failed", LOGP));
                     }
                 }
+                if (diff_time >= HDHRD_SELECT_MSTIME)
+                {
+                    break;
+                }
             }
         }
     }
@@ -766,5 +814,7 @@ main(int argc, char** argv)
     close(hdhrd->yami_fd);
     free(hdhrd);
     free(settings);
+    close(g_term_pipe[0]);
+    close(g_term_pipe[1]);
     return 0;
 }

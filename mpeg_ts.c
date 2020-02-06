@@ -103,11 +103,14 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                 if (s != NULL)
                 {
                     if ((s->end > s->data) &&
-                        (mpegts->continuity_counter !=
-                         ((pi->continuity_counter + 1) & 0xF)))
+                         (mpegts->continuity_counter !=
+                          ((pi->continuity_counter + 1) & 0xF)))
                     {
                         LOGLN0((LOG_ERROR, LOGS "continuity_counter mismatch "
-                                "pid %d", LOGP, mpegts->pid));
+                                "expected 0x%2.2x got 0x%2.2x "
+                                "pid 0x%4.4x", LOGP,
+                                pi->continuity_counter + 1,
+                                mpegts->continuity_counter, mpegts->pid));
                         /* maybe lost one */
                         free(s->data);
                         free(s);
@@ -122,9 +125,9 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                     {
                         out_uint8a(s, in_s->p, cb_bytes);
                         s->end = s->p;
-                        pi->continuity_counter = mpegts->continuity_counter;
                     }
                 }
+                pi->continuity_counter = mpegts->continuity_counter;
             }
             if (mpegts->ppcr != NULL)
             {
@@ -173,7 +176,7 @@ process_mpeg_ts_packet(const void* data, int bytes,
     }
     if (mpegts.transport_error_indicator)
     {
-        LOGLN0((LOG_ERROR, LOGS "transport_error_indicator set pid %d "
+        LOGLN0((LOG_ERROR, LOGS "transport_error_indicator set, pid %d",
                 LOGP, mpegts.pid));
         return 2;
     }

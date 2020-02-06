@@ -40,7 +40,7 @@ struct stream
     char *data;
     char *end;
     int size;
-    int pad0;
+    int fd;
     struct stream* next;
 };
 
