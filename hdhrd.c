@@ -50,6 +50,16 @@ struct video_info
     struct video_info* next;
 };
 
+struct audio_info
+{
+    int dts;
+    int pts;
+    int flags0;
+    int flags1;
+    struct stream* s;
+    struct audio_info* next;
+};
+
 struct settings_info
 {
     char hdhrd_uds[256];
@@ -225,6 +235,125 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
 
 /*****************************************************************************/
 static int
+hdhrd_process_ai(struct hdhrd_info* hdhrd)
+{
+    int error;
+    int cdata_bytes;
+    int now;
+    int decoded;
+    int cdata_bytes_processed;
+    int channels;
+    int bytes;
+    struct stream* s;
+    struct stream* out_s;
+    struct audio_info* ai;
+
+    LOGLN10((LOG_INFO, LOGS, LOGP));
+    ai = hdhrd->audio_head;
+    if (ai != NULL)
+    {
+        if (get_mstime(&now) == 0)
+        {
+            LOGLN10((LOG_INFO, LOGS "vi %p pts %10.10u dts %10.10u "
+                     "now %10.10u", LOGP, vi, vi->pts, vi->dts, now));
+            if (now < (ai->pts - hdhrd->time_diff))
+            {
+                LOGLN10((LOG_INFO, LOGS "not yet", LOGP));
+                return 0;
+            }
+        }
+        s = ai->s;
+        if (hdhrd->ac3 == NULL)
+        {
+            error = hdhrd_ac3_create(&(hdhrd->ac3));
+            LOGLN0((LOG_INFO, LOGS "hdhrd_ac3_create rv %d", LOGP, error));
+        }
+        if (hdhrd->ac3 != NULL)
+        {
+            while (s_check_rem(s, 8))
+            {
+                cdata_bytes = (int)(s->end - s->p);
+                decoded = 0;
+                error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
+                                         &cdata_bytes_processed, &decoded);
+                LOGLN10((LOG_DEBUG, LOGS "error %d cdata_bytes %d "
+                         "cdata_bytes_processed %d decoded %d",
+                         LOGP, error, cdata_bytes, cdata_bytes_processed,
+                         decoded));
+                if (error != 0)
+                {
+                    LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_decode "
+                            "failed %d", LOGP, error));
+                    break;
+                }
+                s->p += cdata_bytes_processed;
+                if (decoded)
+                {
+                    error = hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels,
+                                                     &bytes);
+                    if (error != 0)
+                    {
+                        LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_info "
+                                "failed %d", LOGP, error));
+                    }
+                    LOGLN10((LOG_DEBUG, LOGS "channels %d bytes %d",
+                             LOGP, channels, bytes));
+                    out_s = (struct stream*)calloc(1, sizeof(struct stream));
+                    if (out_s != NULL)
+                    {
+                        out_s->data = (char*)malloc(bytes + 1024);
+                        if (out_s->data != NULL)
+                        {
+                            out_s->p = out_s->data;
+                            out_uint32_le(out_s, 2);
+                            out_uint32_le(out_s, 24 + bytes);
+                            out_uint32_le(out_s, ai->pts);
+                            out_uint32_le(out_s, ai->dts);
+                            out_uint32_le(out_s, channels);
+                            out_uint32_le(out_s, bytes);
+                            error = hdhrd_ac3_get_frame_data(hdhrd->ac3,
+                                                             out_s->p,
+                                                             bytes);
+                            if (error != 0)
+                            {
+                                LOGLN0((LOG_ERROR, LOGS
+                                        "hdhrd_ac3_get_frame_data "
+                                        "failed %d", LOGP, error));
+                                free(out_s->data);
+                                free(out_s);
+                                return 0;
+                            }
+                            out_s->p += bytes;
+                            out_s->end = out_s->p;
+                            out_s->p = out_s->data;
+                            hdhrd_peer_queue_all_audio(hdhrd, out_s);
+                            free(out_s->data);
+                        }
+                        free(out_s);
+                    }
+                }
+            }
+        }
+        if (ai->next == NULL)
+        {
+            hdhrd->audio_head = NULL;
+            hdhrd->audio_tail = NULL;
+        }
+        else
+        {
+            hdhrd->audio_head = hdhrd->audio_head->next;
+        }
+        LOGLN10((LOG_DEBUG, LOGS "audio_head %p audio_tail %p", LOGP,
+                 hdhrd->audio_head, hdhrd->audio_tail));
+        free(ai->s->data);
+        free(ai->s);
+        free(ai);
+    }
+    return 0;
+}
+
+/*****************************************************************************/
+static int
 tmpegts_video_cb(struct pid_info* pi, void* udata)
 {
     int error;
@@ -308,14 +437,10 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     int pts;
     int dts;
     int cdata_bytes;
-    int cdata_bytes_processed;
-    int decoded;
-    int channels;
-    int bytes;
     int pdu_bytes;
     struct stream* s;
-    struct stream* out_s;
     struct hdhrd_info* hdhrd;
+    struct audio_info* ai;
 
     hdhrd = (struct hdhrd_info*)udata;
 
@@ -331,75 +456,46 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     }
     LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
              "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
-    if (hdhrd->ac3 == NULL)
+    ai = (struct audio_info*)calloc(1, sizeof(struct audio_info));
+    if (ai == NULL)
     {
-        error = hdhrd_ac3_create(&(hdhrd->ac3));
-        LOGLN0((LOG_INFO, LOGS "hdhrd_ac3_create rv %d", LOGP, error));
+        return 1;
     }
-    if (hdhrd->ac3 != NULL)
+    ai->s = (struct stream*)calloc(1, sizeof(struct stream));
+    if (ai->s == NULL)
     {
-        while (s_check_rem(s, 8))
-        {
-            cdata_bytes = (int)(s->end - s->p);
-            decoded = 0;
-            error = hdhrd_ac3_decode(hdhrd->ac3, s->p, cdata_bytes,
-                                     &cdata_bytes_processed, &decoded);
-            LOGLN10((LOG_DEBUG, LOGS "error %d cdata_bytes %d "
-                     "cdata_bytes_processed %d decoded %d",
-                     LOGP, error, cdata_bytes, cdata_bytes_processed,
-                     decoded));
-            if (error != 0)
-            {
-                LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_decode "
-                        "failed %d", LOGP, error));
-                break;
-            }
-            s->p += cdata_bytes_processed;
-            if (decoded)
-            {
-                error = hdhrd_ac3_get_frame_info(hdhrd->ac3, &channels,
-                                                 &bytes);
-                if (error != 0)
-                {
-                    LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_info "
-                            "failed %d", LOGP, error));
-                }
-                LOGLN10((LOG_DEBUG, LOGS "channels %d bytes %d",
-                         LOGP, channels, bytes));
-                out_s = (struct stream*)calloc(1, sizeof(struct stream));
-                if (out_s != NULL)
-                {
-                    out_s->data = (char*)malloc(bytes + 1024);
-                    if (out_s->data != NULL)
-                    {
-                        out_s->p = out_s->data;
-                        out_uint32_le(out_s, 2);
-                        out_uint32_le(out_s, 24 + bytes);
-                        out_uint32_le(out_s, pts);
-                        out_uint32_le(out_s, dts);
-                        out_uint32_le(out_s, channels);
-                        out_uint32_le(out_s, bytes);
-                        error = hdhrd_ac3_get_frame_data(hdhrd->ac3, out_s->p,
-                                                         bytes);
-                        if (error != 0)
-                        {
-                            LOGLN0((LOG_ERROR, LOGS "hdhrd_ac3_get_frame_data "
-                                    "failed %d", LOGP, error));
-                            free(out_s->data);
-                            free(out_s);
-                            return 0;
-                        }
-                        out_s->p += bytes;
-                        out_s->end = out_s->p;
-                        out_s->p = out_s->data;
-                        hdhrd_peer_queue_all_audio(hdhrd, out_s);
-                        free(out_s->data);
-                    }
-                    free(out_s);
-                }
-            }
-        }
+        free(ai);
+        return 2;
     }
+    cdata_bytes = (int)(s->end - s->p);
+    ai->s->data = (char*)malloc(cdata_bytes);
+    if (ai->s->data == NULL)
+    {
+        free(ai->s);
+        free(ai);
+        return 3;
+    }
+    ai->s->size = cdata_bytes;
+    ai->pts = pts;
+    ai->dts = dts;
+    ai->flags0 = pi->flags0;
+    ai->flags1 = pi->flags1;
+    ai->s->p = ai->s->data;
+    out_uint8p(ai->s, s->p, cdata_bytes);
+    ai->s->end = ai->s->p;
+    ai->s->p = ai->s->data;
+    if (hdhrd->audio_tail == NULL)
+    {
+        hdhrd->audio_head = ai;
+        hdhrd->audio_tail = ai;
+    }
+    else
+    {
+        hdhrd->audio_tail->next = ai;
+        hdhrd->audio_tail = ai;
+    }
+    LOGLN10((LOG_DEBUG, LOGS "audio_head %p audio_tail %p", LOGP,
+             hdhrd->audio_head, hdhrd->audio_tail));
     return 0;
 }
 
@@ -841,6 +937,7 @@ main(int argc, char** argv)
                 }
             }
             hdhrd_process_vi(hdhrd);
+            hdhrd_process_ai(hdhrd);
             for (;;)
             {
                 if (get_mstime(&now) != 0)

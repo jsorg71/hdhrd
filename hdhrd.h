@@ -34,6 +34,8 @@ struct hdhrd_info
     struct peer_info* peer_tail;
     struct video_info* video_head;
     struct video_info* video_tail;
+    struct audio_info* audio_head;
+    struct audio_info* audio_tail;
     int time_diff;
     int fd_pts;
     int fd_dts;
