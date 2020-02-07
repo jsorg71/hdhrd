@@ -20,7 +20,7 @@
 #define _HDHRD_UTILS_H_
 
 int
-get_mstime(unsigned int* mstime);
+get_mstime(int* mstime);
 int
 hex_dump(const void* data, int bytes);
 

@@ -40,6 +40,16 @@
 
 static int g_term_pipe[2];
 
+struct video_info
+{
+    int dts;
+    int pts;
+    int flags0;
+    int flags1;
+    struct stream* s;
+    struct video_info* next;
+};
+
 struct settings_info
 {
     char hdhrd_uds[256];
@@ -124,6 +134,97 @@ read_pes(struct stream* s, int* bytes, int* pts, int* dts)
 
 /*****************************************************************************/
 static int
+hdhrd_process_vi(struct hdhrd_info* hdhrd)
+{
+    int error;
+    int cdata_bytes;
+    int now;
+    struct stream* s;
+    struct video_info* vi;
+
+    LOGLN10((LOG_INFO, LOGS, LOGP));
+    vi = hdhrd->video_head;
+    if (vi != NULL)
+    {
+        if (get_mstime(&now) == 0)
+        {
+            LOGLN10((LOG_INFO, LOGS "vi %p pts %10.10u dts %10.10u "
+                     "now %10.10u", LOGP, vi, vi->pts, vi->dts, now));
+            if (now < (vi->pts - hdhrd->time_diff))
+            {
+                LOGLN10((LOG_INFO, LOGS "not yet", LOGP));
+                return 0;
+            }
+        }
+        s = vi->s;
+        if ((hdhrd->yami == NULL) && (vi->flags0 & FLAGS0_RANDOM_ACCESS))
+        {
+            yami_decoder_delete(hdhrd->yami);
+            error = yami_decoder_create(&(hdhrd->yami), 0, 0,
+                                        YI_TYPE_MPEG2, 0);
+            LOGLN0((LOG_INFO, LOGS "yami_decoder_create rv %d", LOGP, error));
+        }
+        if (hdhrd->yami != NULL)
+        {
+            cdata_bytes = (int)(s->end - s->p);
+            error = yami_decoder_decode(hdhrd->yami, s->p, cdata_bytes);
+            LOGLN10((LOG_DEBUG, LOGS "cdata_bytes %d yami_decoder_decode "
+                   "rv %d", LOGP, cdata_bytes, error));
+            if (error == 0)
+            {
+                if (hdhrd->fd > 0)
+                {
+                    close(hdhrd->fd);
+                }
+                error = yami_decoder_get_fd_dst(hdhrd->yami, &hdhrd->fd,
+                                                &hdhrd->fd_width,
+                                                &hdhrd->fd_height,
+                                                &hdhrd->fd_stride,
+                                                &hdhrd->fd_size,
+                                                &hdhrd->fd_bpp);
+                LOGLN10((LOG_DEBUG, LOGS "yami_decoder_get_fd_dst rv %d fd %d "
+                         "fd_width %d fd_height %d fd_stride %d fd_size %d "
+                         "fd_bpp %d", LOGP, error, hdhrd->fd,
+                         hdhrd->fd_width, hdhrd->fd_height,
+                         hdhrd->fd_stride, hdhrd->fd_size, hdhrd->fd_bpp));
+                if (error == 0)
+                {
+                    hdhrd->fd_pts = vi->pts;
+                    hdhrd->fd_dts = vi->dts;
+                }
+                else
+                {
+                    LOGLN0((LOG_ERROR, LOGS "yami_decoder_get_fd_dst failed "
+                            "rv %d", LOGP, error));
+                }
+            }
+            else
+            {
+                LOGLN0((LOG_ERROR, LOGS "yami_decoder_decode failed rv %d",
+                        LOGP, error));
+            }
+        }
+        if (vi->next == NULL)
+        {
+            hdhrd->video_head = NULL;
+            hdhrd->video_tail = NULL;
+        }
+        else
+        {
+            hdhrd->video_head = hdhrd->video_head->next;
+        }
+        LOGLN10((LOG_DEBUG, LOGS "video_head %p video_tail %p", LOGP,
+                 hdhrd->video_head, hdhrd->video_tail));
+        free(vi->s->data);
+        free(vi->s);
+        free(vi);
+
+    }
+    return 0;
+}
+
+/*****************************************************************************/
+static int
 tmpegts_video_cb(struct pid_info* pi, void* udata)
 {
     int error;
@@ -131,8 +232,10 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     int dts;
     int cdata_bytes;
     int pdu_bytes;
+    int now;
     struct stream* s;
     struct hdhrd_info* hdhrd;
+    struct video_info* vi;
 
     hdhrd = (struct hdhrd_info*)udata;
     LOGLN10((LOG_DEBUG, LOGS "bytes %10.10d flags0 0x%8.8x", LOGP,
@@ -145,51 +248,55 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
+    if (hdhrd->time_diff == 0)
+    {
+        get_mstime(&now);
+        hdhrd->time_diff = (dts - now) - 1000;
+        LOGLN10((LOG_DEBUG, LOGS "time_diff %10.10d", LOGP,
+                hdhrd->time_diff));
+    }
     LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
              "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
-    if ((hdhrd->yami == NULL) && (pi->flags0 & FLAGS0_RANDOM_ACCESS))
+    vi = (struct video_info*)calloc(1, sizeof(struct video_info));
+    if (vi == NULL)
     {
-        yami_decoder_delete(hdhrd->yami);
-        error = yami_decoder_create(&(hdhrd->yami), 0, 0, YI_TYPE_MPEG2, 0);
-        LOGLN0((LOG_INFO, LOGS "yami_decoder_create rv %d", LOGP, error));
+        return 1;
     }
-    if (hdhrd->yami != NULL)
+    vi->s = (struct stream*)calloc(1, sizeof(struct stream));
+    if (vi->s == NULL)
     {
-        cdata_bytes = (int)(s->end - s->p);
-        error = yami_decoder_decode(hdhrd->yami, s->p, cdata_bytes);
-        LOGLN10((LOG_DEBUG, LOGS "cdata_bytes %d yami_decoder_decode "
-               "rv %d", LOGP, cdata_bytes, error));
-        if (error == 0)
-        {
-            if (hdhrd->fd > 0)
-            {
-                close(hdhrd->fd);
-            }
-            error = yami_decoder_get_fd_dst(hdhrd->yami, &hdhrd->fd, &hdhrd->fd_width,
-                                            &hdhrd->fd_height, &hdhrd->fd_stride,
-                                            &hdhrd->fd_size, &hdhrd->fd_bpp);
-            LOGLN10((LOG_DEBUG, LOGS "yami_decoder_get_fd_dst rv %d fd %d "
-                     "fd_width %d fd_height %d fd_stride %d fd_size %d "
-                     "fd_bpp %d", LOGP, error, hdhrd->fd,
-                     hdhrd->fd_width, hdhrd->fd_height,
-                     hdhrd->fd_stride, hdhrd->fd_size, hdhrd->fd_bpp));
-            if (error == 0)
-            {
-                hdhrd->fd_pts = pts;
-                hdhrd->fd_dts = dts;
-            }
-            else
-            {
-                LOGLN0((LOG_ERROR, LOGS "yami_decoder_get_fd_dst failed rv %d",
-                        LOGP, error));
-            }
-        }
-        else
-        {
-            LOGLN0((LOG_ERROR, LOGS "yami_decoder_decode failed rv %d",
-                    LOGP, error));
-        }
+        free(vi);
+        return 2;
     }
+    cdata_bytes = (int)(s->end - s->p);
+    vi->s->data = (char*)malloc(cdata_bytes);
+    if (vi->s->data == NULL)
+    {
+        free(vi->s);
+        free(vi);
+        return 3;
+    }
+    vi->s->size = cdata_bytes;
+    vi->pts = pts;
+    vi->dts = dts;
+    vi->flags0 = pi->flags0;
+    vi->flags1 = pi->flags1;
+    vi->s->p = vi->s->data;
+    out_uint8p(vi->s, s->p, cdata_bytes);
+    vi->s->end = vi->s->p;
+    vi->s->p = vi->s->data;
+    if (hdhrd->video_tail == NULL)
+    {
+        hdhrd->video_head = vi;
+        hdhrd->video_tail = vi;
+    }
+    else
+    {
+        hdhrd->video_tail->next = vi;
+        hdhrd->video_tail = vi;
+    }
+    LOGLN10((LOG_DEBUG, LOGS "video_head %p video_tail %p", LOGP,
+             hdhrd->video_head, hdhrd->video_tail));
     return 0;
 }
 
@@ -557,8 +664,8 @@ main(int argc, char** argv)
     int sck;
     int term;
     int diff_time;
-    unsigned int start_time;
-    unsigned int now;
+    int start_time;
+    int now;
     struct sockaddr_un s;
     socklen_t sock_len;
     fd_set rfds;
@@ -733,6 +840,7 @@ main(int argc, char** argv)
                             "returned %d", LOGP, error));
                 }
             }
+            hdhrd_process_vi(hdhrd);
             for (;;)
             {
                 if (get_mstime(&now) != 0)

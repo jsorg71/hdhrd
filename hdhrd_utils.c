@@ -23,10 +23,10 @@
 
 /*****************************************************************************/
 int
-get_mstime(unsigned int* mstime)
+get_mstime(int* mstime)
 {
     struct timespec ts;
-    unsigned int the_tick;
+    int the_tick;
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
     {

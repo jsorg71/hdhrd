@@ -133,7 +133,8 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
             {
                 pi->flags0 |= FLAGS0_PCR_VALID;
                 read_pcr(mpegts->ppcr, &(pi->pcr));
-                LOGLN10((LOG_INFO, LOGS "pcr %10.10u", LOGP, pi->pcr));
+                LOGLN10((LOG_INFO, LOGS "pcr %10.10u pid %d", LOGP, pi->pcr,
+                         mpegts->pid));
             }
             if (mpegts->random_access_indicator)
             {

@@ -38,7 +38,7 @@ logln(int log_level, const char* format, ...)
 {
     va_list ap;
     char* log_line;
-    unsigned int mstime;
+    int mstime;
 
     if (log_level < g_log_level)
     {

@@ -323,7 +323,6 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                 /* error */
                 LOGLN0((LOG_ERROR, LOGS "recv failed sck %d reed %d",
                         LOGP, peer->sck, reed));
-
                 hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
                 continue;
             }
@@ -373,8 +372,8 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                     if (hdhrd_peer_send_fd(peer->sck, out_s->fd) != 0)
                     {
                         /* error */
-                        LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_send_fd failed",
-                                LOGP));
+                        LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_send_fd failed "
+                                "fd %d", LOGP, out_s->fd));
                         hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
                         continue;
                     }

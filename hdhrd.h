@@ -32,6 +32,9 @@ struct hdhrd_info
     void* yami;
     struct peer_info* peer_head;
     struct peer_info* peer_tail;
+    struct video_info* video_head;
+    struct video_info* video_tail;
+    int time_diff;
     int fd_pts;
     int fd_dts;
     int fd;
@@ -41,9 +44,6 @@ struct hdhrd_info
     int fd_size;
     int fd_bpp;
 };
-
-int
-get_mstime(unsigned int* mstime);
 
 #endif
 
