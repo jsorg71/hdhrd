@@ -19,12 +19,13 @@
 #ifndef _HDHRD_H_
 #define _HDHRD_H_
 
-#define HDHRD_BUFFER_SIZE (64 * 1024)
+#define HDHRD_BUFFER_SIZE (256 * 1024)
 #define HDHRD_SELECT_MSTIME 15
 #define HDHRD_UDS "/tmp/wtv_hdhrd%d"
 
 struct hdhrd_info
 {
+    struct hdhomerun_device_t* hdhr;
     struct tmpegts_cb cb;
     int listener;
     int yami_fd;
@@ -36,7 +37,8 @@ struct hdhrd_info
     struct video_info* video_tail;
     struct audio_info* audio_head;
     struct audio_info* audio_tail;
-    int time_diff;
+    int video_diff;
+    int audio_diff;
     int fd_pts;
     int fd_dts;
     int fd;
@@ -45,6 +47,9 @@ struct hdhrd_info
     int fd_stride;
     int fd_size;
     int fd_bpp;
+    int video_frame_count;
+    int last_decode_mstime;
+    int is_running;
 };
 
 #endif
