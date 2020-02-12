@@ -19,6 +19,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if 0
+
 #include <time.h>
 
 /*****************************************************************************/
@@ -37,6 +40,21 @@ get_mstime(int* mstime)
     *mstime = the_tick;
     return 0;
 }
+#else
+
+#include <sys/time.h>
+
+/*****************************************************************************/
+int
+get_mstime(int* mstime)
+{
+    struct timeval tp;
+
+    gettimeofday(&tp, 0);
+    *mstime = (tp.tv_sec * 1000) + (tp.tv_usec / 1000);
+    return 0;
+}
+#endif
 
 /*****************************************************************************/
 int

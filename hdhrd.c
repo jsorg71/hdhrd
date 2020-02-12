@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 
 #include <hdhomerun.h>
 
@@ -393,11 +394,18 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     }
     if (hdhrd->video_diff == 0)
     {
-        get_mstime(&now);
-        hdhrd->video_diff = (pts - now) - 2000;
-        LOGLN10((LOG_DEBUG, LOGS "video_diff %10.10d", LOGP,
-                hdhrd->video_diff));
+        if (get_mstime(&now) == 0)
+        {
+            hdhrd->video_diff = (pts - now) - 3000;
+            LOGLN0((LOG_INFO, LOGS "video_diff %10.10d", LOGP,
+                    hdhrd->video_diff));
+        }
     }
+#if 0
+    get_mstime(&now);
+    LOGLN0((LOG_DEBUG, LOGS "pts diff  %10.10d", LOGP,
+            (pts - hdhrd->video_diff) - now));
+#endif
     LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
              "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
     vi = (struct video_info*)calloc(1, sizeof(struct video_info));
@@ -472,12 +480,18 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     }
     if (hdhrd->audio_diff == 0)
     {
-        get_mstime(&now);
-        //hdhrd->audio_diff = pts - now;
-        hdhrd->audio_diff = (pts - now) - 1000;
-        LOGLN10((LOG_DEBUG, LOGS "audio_diff %10.10d", LOGP,
-                hdhrd->audio_diff));
+        if (get_mstime(&now) == 0)
+        {
+            hdhrd->audio_diff = (pts - now) - 2000;
+            LOGLN0((LOG_INFO, LOGS "audio_diff %10.10d", LOGP,
+                    hdhrd->audio_diff));
+        }
     }
+#if 0
+    get_mstime(&now);
+    LOGLN0((LOG_DEBUG, LOGS "pts diff  %10.10d", LOGP,
+            (pts - hdhrd->video_diff) - now));
+#endif
     LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
              "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
     ai = (struct audio_info*)calloc(1, sizeof(struct audio_info));
@@ -1024,7 +1038,11 @@ hdhrd_proces_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
         }
         else
         {
-            get_mstime(&now);
+            if (get_mstime(&now) != 0)
+            {
+                LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
+                break;
+            }
             millis = mstime - now;
             if (millis < 0)
             {
@@ -1092,7 +1110,11 @@ hdhrd_proces_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
                 }
             }
         }
-        get_mstime(&now);
+        if (get_mstime(&now) != 0)
+        {
+            LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
+            break;
+        }
         if (now >= mstime)
         {
             break;
@@ -1186,6 +1208,7 @@ main(int argc, char** argv)
         free(hdhrd);
         return 1;
     }
+    chmod(settings->hdhrd_uds, 0777);
     LOGLN0((LOG_INFO, LOGS "listen ok socket %d uds %s",
             LOGP, hdhrd->listener, settings->hdhrd_uds));
     if (pipe(g_term_pipe) != 0)
@@ -1200,10 +1223,14 @@ main(int argc, char** argv)
     {
         if (hdhrd->is_running)
         {
-            get_mstime(&now);
+            if (get_mstime(&now) != 0)
+            {
+                LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
+                break;
+            }
             hdhrd_process_vi_ai(hdhrd);
             hdhrd_process_stream_recv(hdhrd);
-            hdhrd_recv_mstime = now + 15;
+            hdhrd_recv_mstime = now + HDHRD_SELECT_MSTIME;
             hdhrd_mstime = hdhrd_recv_mstime;
             if (hdhrd_get_viai_mstime(hdhrd, &hdhrd_viai_mstime) == 0)
             {
