@@ -392,10 +392,11 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
-    if (hdhrd->video_diff == 0)
+    if ((hdhrd->video_diff == 0) || (pts > hdhrd->video_update_pts + 60000))
     {
         if (get_mstime(&now) == 0)
         {
+            hdhrd->video_update_pts = pts;
             hdhrd->video_diff = (pts - now) - 3000;
             LOGLN0((LOG_INFO, LOGS "video_diff %10.10d", LOGP,
                     hdhrd->video_diff));
@@ -428,6 +429,18 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
         free(vi);
         return 3;
     }
+#if 0
+    LOGLN0((LOG_DEBUG, LOGS "cdata_bytes %d", LOGP, cdata_bytes));
+    //hex_dump(s->p, 64);
+    int index;
+    for (index = 0; index < cdata_bytes - 4; index++)
+    {
+        if (s->p[index] == 0 && s->p[index + 1] == 0 && s->p[index + 2] == 0 && s->p[index + 3] == 1)
+        {
+            LOGLN0((LOG_DEBUG, LOGS "found index %d", LOGP, index));
+        }
+    }
+#endif
     vi->s->size = cdata_bytes;
     vi->pts = pts;
     vi->dts = dts;
@@ -478,10 +491,11 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
-    if (hdhrd->audio_diff == 0)
+    if ((hdhrd->audio_diff == 0) || (pts > hdhrd->audio_update_pts + 60000))
     {
         if (get_mstime(&now) == 0)
         {
+            hdhrd->audio_update_pts = pts;
             hdhrd->audio_diff = (pts - now) - 2000;
             LOGLN0((LOG_INFO, LOGS "audio_diff %10.10d", LOGP,
                     hdhrd->audio_diff));
@@ -1208,10 +1222,20 @@ main(int argc, char** argv)
         free(hdhrd);
         return 1;
     }
-    chmod(settings->hdhrd_uds, 0777);
+    error = chmod(settings->hdhrd_uds, 0777);
+    if (error != 0)
+    {
+        LOGLN0((LOG_ERROR, LOGS "chmod failed for %s",
+                LOGP, settings->hdhrd_uds));
+        close(hdhrd->listener);
+        free(settings);
+        free(hdhrd);
+        return 1;
+    }
     LOGLN0((LOG_INFO, LOGS "listen ok socket %d uds %s",
             LOGP, hdhrd->listener, settings->hdhrd_uds));
-    if (pipe(g_term_pipe) != 0)
+    error = pipe(g_term_pipe);
+    if (error != 0)
     {
         LOGLN0((LOG_ERROR, LOGS "pipe failed", LOGP));
         close(hdhrd->listener);

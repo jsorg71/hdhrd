@@ -50,7 +50,10 @@ get_mstime(int* mstime)
 {
     struct timeval tp;
 
-    gettimeofday(&tp, 0);
+    if (gettimeofday(&tp, 0) != 0)
+    {
+        return 1;
+    }
     *mstime = (tp.tv_sec * 1000) + (tp.tv_usec / 1000);
     return 0;
 }
