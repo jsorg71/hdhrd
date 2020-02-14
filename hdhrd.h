@@ -21,6 +21,9 @@
 
 #define HDHRD_BUFFER_SIZE (256 * 1024)
 #define HDHRD_SELECT_MSTIME 15
+#define HDHRD_SYNC_MSTIME 60000
+#define HDHRD_VIDEO_DELAY_MSTIME 3000
+#define HDHRD_AUDIO_DELAY_MSTIME 2000
 #define HDHRD_UDS "/tmp/wtv_hdhrd%d"
 
 struct hdhrd_info

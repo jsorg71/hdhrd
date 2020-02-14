@@ -392,14 +392,15 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
-    if ((hdhrd->video_diff == 0) || (pts > hdhrd->video_update_pts + 60000))
+    if ((hdhrd->video_diff == 0) ||
+        (pts > hdhrd->video_update_pts + HDHRD_SYNC_MSTIME))
     {
         if (get_mstime(&now) == 0)
         {
             hdhrd->video_update_pts = pts;
-            hdhrd->video_diff = (pts - now) - 3000;
-            LOGLN0((LOG_INFO, LOGS "video_diff %10.10d", LOGP,
-                    hdhrd->video_diff));
+            hdhrd->video_diff = (pts - now) - HDHRD_VIDEO_DELAY_MSTIME;
+            LOGLN10((LOG_INFO, LOGS "video_diff %10.10d", LOGP,
+                     hdhrd->video_diff));
         }
     }
 #if 0
@@ -491,14 +492,15 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     {
         return 0;
     }
-    if ((hdhrd->audio_diff == 0) || (pts > hdhrd->audio_update_pts + 60000))
+    if ((hdhrd->audio_diff == 0) ||
+        (pts > hdhrd->audio_update_pts + HDHRD_SYNC_MSTIME))
     {
         if (get_mstime(&now) == 0)
         {
             hdhrd->audio_update_pts = pts;
-            hdhrd->audio_diff = (pts - now) - 2000;
-            LOGLN0((LOG_INFO, LOGS "audio_diff %10.10d", LOGP,
-                    hdhrd->audio_diff));
+            hdhrd->audio_diff = (pts - now) - HDHRD_AUDIO_DELAY_MSTIME;
+            LOGLN10((LOG_INFO, LOGS "audio_diff %10.10d", LOGP,
+                     hdhrd->audio_diff));
         }
     }
 #if 0
@@ -631,6 +633,7 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
             LOGLN0((LOG_INFO, LOGS "found stream_type 0x%4.4x "
                     "elementary_pid 0x%4.4x es_info_length %d",
                     LOGP, stream_type, elementary_pid, es_info_length));
+            //hex_dump(s->p, es_info_length);
             in_uint8s(s, es_info_length);
             if ((stream_type == 0x02) && (video_pid == 0)) /* mpeg2 */
             {
