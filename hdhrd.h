@@ -24,7 +24,7 @@
 #define HDHRD_SYNC_MSTIME 60000
 #define HDHRD_VIDEO_DELAY_MSTIME 3000
 #define HDHRD_AUDIO_DELAY_MSTIME 2000
-#define HDHRD_UDS "/tmp/wtv_hdhrd%d"
+#define HDHRD_UDS "/tmp/wtv_hdhrd_%d"
 
 struct hdhrd_info
 {
