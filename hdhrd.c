@@ -1017,8 +1017,8 @@ hdhrd_stop(struct hdhrd_info* hdhrd)
 
 /*****************************************************************************/
 static int
-hdhrd_proces_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
-                 int mstime)
+hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
+                  int mstime)
 {
     int max_fd;
     int now;
@@ -1267,14 +1267,14 @@ main(int argc, char** argv)
                 }
             }
             LOGLN10((LOG_INFO, LOGS "hdhrd_mstime %d", LOGP, hdhrd_mstime));
-            if (hdhrd_proces_fds(hdhrd, settings, hdhrd_mstime) != 0)
+            if (hdhrd_process_fds(hdhrd, settings, hdhrd_mstime) != 0)
             {
                 break;
             }
         }
         else
         {
-            if (hdhrd_proces_fds(hdhrd, settings, -1) != 0)
+            if (hdhrd_process_fds(hdhrd, settings, -1) != 0)
             {
                 break;
             }
