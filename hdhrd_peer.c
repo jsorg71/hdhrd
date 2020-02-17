@@ -154,8 +154,8 @@ mdhrd_peer_queue_frame(struct hdhrd_info* hdhrd, struct peer_info* peer)
     out_s->p = out_s->data;
     out_uint32_le(out_s, 4);
     out_uint32_le(out_s, 40);
-    out_uint32_le(out_s, hdhrd->fd_pts);
-    out_uint32_le(out_s, hdhrd->fd_dts);
+    out_uint32_le(out_s, hdhrd->fd_time);
+    out_uint8s(out_s, 4);
     out_uint32_le(out_s, hdhrd->fd);
     out_uint32_le(out_s, hdhrd->fd_width);
     out_uint32_le(out_s, hdhrd->fd_height);

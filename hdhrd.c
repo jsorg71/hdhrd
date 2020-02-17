@@ -152,6 +152,7 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
     int now;
     struct stream* s;
     struct video_info* vi;
+    YI_INT64 time;
 
     LOGLN10((LOG_INFO, LOGS, LOGP));
     vi = hdhrd->video_head;
@@ -160,14 +161,39 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
         if (get_mstime(&now) == 0)
         {
             LOGLN10((LOG_INFO, LOGS "vi %p pts %10.10u dts %10.10u "
-                     "now %10.10d vi->pts - hdhrd->video_dif %10.10d",
+                     "now %10.10d vi->dts - hdhrd->video_dif %10.10d",
                      LOGP, vi, vi->pts, vi->dts, now,
-                     vi->pts - hdhrd->video_diff));
-            if (now < (vi->pts - hdhrd->video_diff))
+                     vi->dts - hdhrd->video_diff));
+            if (now < (vi->dts - hdhrd->video_diff))
             {
-                LOGLN10((LOG_INFO, LOGS "not yet", LOGP));
+                LOGLN10((LOG_INFO, LOGS "not yet %d", LOGP,
+                         vi->dts - hdhrd->video_diff - now));
                 return 0;
             }
+#if 0
+            else
+            {
+                struct video_info* vi1;
+                LOGLN10((LOG_INFO, LOGS "ok by %d", LOGP,
+                         now - (vi->dts - hdhrd->video_diff)));
+                /* check next too */
+                vi1 = vi->next;
+                if (vi1 != NULL)
+                {
+                    if (now < (vi1->dts - hdhrd->video_diff))
+                    {
+                    }
+                    else
+                    {
+                        LOGLN0((LOG_INFO, LOGS "next one ok too ms since "
+                                "last check %d dts diff %d", LOGP,
+                                now - hdhrd->last_video_check_mstime,
+                                vi1->dts - vi->dts));
+                    }
+                }
+            }
+#endif
+            hdhrd->last_video_check_mstime = now;
         }
         s = vi->s;
         if ((hdhrd->yami == NULL) && (vi->flags0 & FLAGS0_RANDOM_ACCESS))
@@ -181,7 +207,8 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
         if (hdhrd->yami != NULL)
         {
             cdata_bytes = (int)(s->end - s->p);
-            error = yami_decoder_decode(hdhrd->yami, s->p, cdata_bytes);
+            error = yami_decoder_decode_time(hdhrd->yami, s->p, cdata_bytes,
+                                             vi->pts);
             LOGLN10((LOG_DEBUG, LOGS "cdata_bytes %d yami_decoder_decode "
                    "rv %d", LOGP, cdata_bytes, error));
             if (error == 0)
@@ -196,22 +223,23 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
                                                 &hdhrd->fd_height,
                                                 &hdhrd->fd_stride,
                                                 &hdhrd->fd_size,
-                                                &hdhrd->fd_bpp);
+                                                &hdhrd->fd_bpp,
+                                                &time);
                 LOGLN10((LOG_DEBUG, LOGS "yami_decoder_get_fd_dst rv %d fd %d "
                          "fd_width %d fd_height %d fd_stride %d fd_size %d "
-                         "fd_bpp %d", LOGP, error, hdhrd->fd,
+                         "fd_bpp %d fd_time %lld", LOGP, error, hdhrd->fd,
                          hdhrd->fd_width, hdhrd->fd_height,
-                         hdhrd->fd_stride, hdhrd->fd_size, hdhrd->fd_bpp));
+                         hdhrd->fd_stride, hdhrd->fd_size,
+                         hdhrd->fd_bpp, hdhrd->fd_time));
                 if (error == 0)
                 {
 #if 0
-                    int now;
-                    get_mstime(&now);
-                    LOGLN0((LOG_INFO, LOGS "last frame %d", LOGP, now - hdhrd->last_decode_mstime));
+                    int now1;
+                    get_mstime(&now1);
+                    LOGLN0((LOG_INFO, LOGS "last frame %d", LOGP, now1 - hdhrd->last_decode_mstime));
+                    hdhrd->last_decode_mstime = now1;
 #endif
-                    hdhrd->last_decode_mstime = now;
-                    hdhrd->fd_pts = vi->pts;
-                    hdhrd->fd_dts = vi->dts;
+                    hdhrd->fd_time = time;
                     hdhrd->video_frame_count++;
                     hdhrd_peer_queue_all_video(hdhrd);
                 }
@@ -269,9 +297,10 @@ hdhrd_process_ai(struct hdhrd_info* hdhrd)
         {
             LOGLN10((LOG_INFO, LOGS "vi %p pts %10.10u dts %10.10u "
                      "now %10.10u", LOGP, vi, vi->pts, vi->dts, now));
-            if (now < (ai->pts - hdhrd->audio_diff))
+            if (now < (ai->dts - hdhrd->audio_diff))
             {
-                LOGLN10((LOG_INFO, LOGS "not yet", LOGP));
+                LOGLN10((LOG_INFO, LOGS "not yet %d", LOGP,
+                         ai->dts - hdhrd->audio_diff - now));
                 return 0;
             }
         }
@@ -322,7 +351,7 @@ hdhrd_process_ai(struct hdhrd_info* hdhrd)
                             out_uint32_le(out_s, 2);
                             out_uint32_le(out_s, 24 + bytes);
                             out_uint32_le(out_s, ai->pts);
-                            out_uint32_le(out_s, ai->dts);
+                            out_uint8s(out_s, 4);
                             out_uint32_le(out_s, channels);
                             out_uint32_le(out_s, bytes);
                             error = hdhrd_ac3_get_frame_data(hdhrd->ac3,
@@ -393,20 +422,20 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
         return 0;
     }
     if ((hdhrd->video_diff == 0) ||
-        (pts > hdhrd->video_update_pts + HDHRD_SYNC_MSTIME))
+        (dts > hdhrd->video_update_dts + HDHRD_SYNC_MSTIME))
     {
         if (get_mstime(&now) == 0)
         {
-            hdhrd->video_update_pts = pts;
-            hdhrd->video_diff = (pts - now) - HDHRD_VIDEO_DELAY_MSTIME;
+            hdhrd->video_update_dts = dts;
+            hdhrd->video_diff = (dts - now) - HDHRD_VIDEO_DELAY_MSTIME;
             LOGLN10((LOG_INFO, LOGS "video_diff %10.10d", LOGP,
                      hdhrd->video_diff));
         }
     }
 #if 0
     get_mstime(&now);
-    LOGLN0((LOG_DEBUG, LOGS "pts diff  %10.10d", LOGP,
-            (pts - hdhrd->video_diff) - now));
+    LOGLN0((LOG_DEBUG, LOGS "dts diff  %10.10d", LOGP,
+            (dts - hdhrd->video_diff) - now));
 #endif
     LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
              "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
@@ -493,20 +522,20 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
         return 0;
     }
     if ((hdhrd->audio_diff == 0) ||
-        (pts > hdhrd->audio_update_pts + HDHRD_SYNC_MSTIME))
+        (dts > hdhrd->audio_update_dts + HDHRD_SYNC_MSTIME))
     {
         if (get_mstime(&now) == 0)
         {
-            hdhrd->audio_update_pts = pts;
-            hdhrd->audio_diff = (pts - now) - HDHRD_AUDIO_DELAY_MSTIME;
+            hdhrd->audio_update_dts = dts;
+            hdhrd->audio_diff = (dts - now) - HDHRD_AUDIO_DELAY_MSTIME;
             LOGLN10((LOG_INFO, LOGS "audio_diff %10.10d", LOGP,
                      hdhrd->audio_diff));
         }
     }
 #if 0
     get_mstime(&now);
-    LOGLN0((LOG_DEBUG, LOGS "pts diff  %10.10d", LOGP,
-            (pts - hdhrd->video_diff) - now));
+    LOGLN0((LOG_DEBUG, LOGS "dts diff  %10.10d", LOGP,
+            (dts - hdhrd->video_diff) - now));
 #endif
     LOGLN10((LOG_DEBUG, LOGS "error %d pts %10.10u dts %10.10u "
              "pdu_bytes %d", LOGP, error, pts, dts, pdu_bytes));
@@ -862,19 +891,19 @@ hdhrd_get_viai_mstime(struct hdhrd_info* hdhrd, int* mstime)
         }
         else
         {
-            lmstime = hdhrd->audio_head->pts - hdhrd->audio_diff;
+            lmstime = hdhrd->audio_head->dts - hdhrd->audio_diff;
         }
     }
     else
     {
         if (hdhrd->audio_head == NULL)
         {
-            lmstime = hdhrd->video_head->pts - hdhrd->video_diff;
+            lmstime = hdhrd->video_head->dts - hdhrd->video_diff;
         }
         else
         {
-            lmstime = hdhrd->audio_head->pts - hdhrd->audio_diff;
-            lmstime1 = hdhrd->video_head->pts - hdhrd->video_diff;
+            lmstime = hdhrd->audio_head->dts - hdhrd->audio_diff;
+            lmstime1 = hdhrd->video_head->dts - hdhrd->video_diff;
             if (lmstime1 < lmstime)
             {
                 lmstime = lmstime1;
@@ -889,25 +918,38 @@ hdhrd_get_viai_mstime(struct hdhrd_info* hdhrd, int* mstime)
 static int
 hdhrd_process_vi_ai(struct hdhrd_info* hdhrd)
 {
+    //int mstime1;
+    //int mstime2;
+    //int mstime3;
+    int audio_count;
+
+    //get_mstime(&mstime1);
 #if 0
     int index;
 
     index = 0;
     while (hdhrd_process_vi(hdhrd) > 0)
     {
-        LOGLN0((LOG_INFO, LOGS "processed video index %d", LOGP, index));
+        LOGLN10((LOG_INFO, LOGS "processed video index %d", LOGP, index));
         index++;
     }
     index = 0;
     while (hdhrd_process_ai(hdhrd) > 0)
     {
-        LOGLN0((LOG_INFO, LOGS "processed audio index %d", LOGP, index));
+        LOGLN10((LOG_INFO, LOGS "processed audio index %d", LOGP, index));
         index++;
     }
 #else
-    hdhrd_process_vi(hdhrd);
-    hdhrd_process_ai(hdhrd);
+    audio_count = hdhrd_process_ai(hdhrd);
+    //get_mstime(&mstime2);
+    if (audio_count == 0)
+    {
+        hdhrd_process_vi(hdhrd);
+    }
+    //get_mstime(&mstime3);
 #endif
+    LOGLN10((LOG_INFO, LOGS "audio time %d video time %d", LOGP,
+             mstime2 - mstime1, mstime3 - mstime2));
     return 0;
 }
 
@@ -1250,13 +1292,20 @@ main(int argc, char** argv)
     {
         if (hdhrd->is_running)
         {
+            //int mstime1;
+            //int mstime2;
+            //int mstime3;
+            //int mstime4;
+
             if (get_mstime(&now) != 0)
             {
                 LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
                 break;
             }
             hdhrd_process_vi_ai(hdhrd);
+            //get_mstime(&mstime1);
             hdhrd_process_stream_recv(hdhrd);
+            //get_mstime(&mstime2);
             hdhrd_recv_mstime = now + HDHRD_SELECT_MSTIME;
             hdhrd_mstime = hdhrd_recv_mstime;
             if (hdhrd_get_viai_mstime(hdhrd, &hdhrd_viai_mstime) == 0)
@@ -1267,10 +1316,16 @@ main(int argc, char** argv)
                 }
             }
             LOGLN10((LOG_INFO, LOGS "hdhrd_mstime %d", LOGP, hdhrd_mstime));
+            //get_mstime(&mstime3);
             if (hdhrd_process_fds(hdhrd, settings, hdhrd_mstime) != 0)
             {
                 break;
             }
+            //get_mstime(&mstime4);
+            //LOGLN0((LOG_INFO, LOGS "mstime1 %10.10d mstime2 %10.10d "
+            //        "mstime3 %10.10d mstime4 %10.10d",
+            //        LOGP, mstime1 - now, mstime2 - mstime1,
+            //        mstime3 - mstime2, mstime4 - mstime3));
         }
         else
         {

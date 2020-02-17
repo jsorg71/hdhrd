@@ -41,20 +41,20 @@ struct hdhrd_info
     struct audio_info* audio_head;
     struct audio_info* audio_tail;
     int video_diff;
-    int video_update_pts;
+    int video_update_dts;
     int audio_diff;
-    int audio_update_pts;
-    int fd_pts;
-    int fd_dts;
+    int audio_update_dts;
     int fd;
     int fd_width;
     int fd_height;
     int fd_stride;
     int fd_size;
     int fd_bpp;
+    int fd_time;
     int video_frame_count;
     int last_decode_mstime;
     int is_running;
+    int last_video_check_mstime;
     int pad0;
 };
 
