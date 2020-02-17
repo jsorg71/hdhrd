@@ -130,23 +130,23 @@ struct stream
 #if defined(B_ENDIAN) || defined(NEED_ALIGN)
 #define in_uint64_le(s, v) do \
 { \
-    (v) = (tui64) \
+    (v) = (long long) \
         ( \
-            (((tui64)(*((unsigned char*)((s)->p + 0)))) << 0) | \
-            (((tui64)(*((unsigned char*)((s)->p + 1)))) << 8) | \
-            (((tui64)(*((unsigned char*)((s)->p + 2)))) << 16) | \
-            (((tui64)(*((unsigned char*)((s)->p + 3)))) << 24) | \
-            (((tui64)(*((unsigned char*)((s)->p + 4)))) << 32) | \
-            (((tui64)(*((unsigned char*)((s)->p + 5)))) << 40) | \
-            (((tui64)(*((unsigned char*)((s)->p + 6)))) << 48) | \
-            (((tui64)(*((unsigned char*)((s)->p + 7)))) << 56) \
+            (((long long)(*((unsigned char*)((s)->p + 0)))) << 0) | \
+            (((long long)(*((unsigned char*)((s)->p + 1)))) << 8) | \
+            (((long long)(*((unsigned char*)((s)->p + 2)))) << 16) | \
+            (((long long)(*((unsigned char*)((s)->p + 3)))) << 24) | \
+            (((long long)(*((unsigned char*)((s)->p + 4)))) << 32) | \
+            (((long long)(*((unsigned char*)((s)->p + 5)))) << 40) | \
+            (((long long)(*((unsigned char*)((s)->p + 6)))) << 48) | \
+            (((long long)(*((unsigned char*)((s)->p + 7)))) << 56) \
         ); \
     (s)->p += 8; \
 } while (0)
 #else
 #define in_uint64_le(s, v) do \
 { \
-    (v) = *((tui64*)((s)->p)); \
+    (v) = *((long long*)((s)->p)); \
     (s)->p += 8; \
 } while (0)
 #endif
@@ -245,7 +245,7 @@ struct stream
 #else
 #define out_uint64_le(s, v) do \
 { \
-    *((tui64*)((s)->p)) = (v); \
+    *((long long*)((s)->p)) = (v); \
     (s)->p += 8; \
 } while (0)
 #endif
