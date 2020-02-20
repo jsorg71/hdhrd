@@ -58,7 +58,17 @@ hdhrd_peer_delete_one(struct peer_info* peer)
     {
         lout_s = out_s;
         out_s = out_s->next;
-        free(lout_s->data);
+        if (lout_s->data == NULL)
+        {
+            if (lout_s->fd > 0)
+            {
+                close(lout_s->fd);
+            }
+        }
+        else
+        {
+            free(lout_s->data);
+        }
         free(lout_s);
     }
     if (peer->in_s != NULL)
@@ -109,7 +119,7 @@ hdhrd_peer_remove_one(struct hdhrd_info* hdhrd, struct peer_info** apeer,
     }
     else
     {
-        /* remome middle item */
+        /* remove middle item */
         last_peer->next = peer->next;
         lpeer = peer;
         peer = peer->next;
@@ -442,6 +452,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                     {
                         peer->out_s_head = out_s->next;
                     }
+                    close(out_s->fd);
                     free(out_s);
                 }
                 else
@@ -579,7 +590,13 @@ hdhrd_peer_queue(struct peer_info* peer, struct stream* out_s)
     }
     if (out_s->data == NULL)
     {
-        lout_s->fd = out_s->fd;
+        lout_s->fd = dup(out_s->fd);
+        if (lout_s->fd == -1)
+        {
+            free(lout_s);
+            return 2;
+        }
+        LOGLN10((LOG_INFO, LOGS "fd %d", LOGP, lout_s->fd));
     }
     else
     {
@@ -587,14 +604,14 @@ hdhrd_peer_queue(struct peer_info* peer, struct stream* out_s)
         if ((bytes < 1) || (bytes > 1024 * 1024))
         {
             free(lout_s);
-            return 2;
+            return 3;
         }
         lout_s->size = bytes;
         lout_s->data = (char*)malloc(lout_s->size);
         if (lout_s->data == NULL)
         {
             free(lout_s);
-            return 3;
+            return 4;
         }
         lout_s->p = lout_s->data;
         out_uint8p(lout_s, out_s->data, bytes);
