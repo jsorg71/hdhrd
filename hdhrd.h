@@ -40,6 +40,10 @@ struct hdhrd_info
     struct video_info* video_tail;
     struct audio_info* audio_head;
     struct audio_info* audio_tail;
+    int video_info_count;
+    int video_info_bytes;
+    int audio_info_count;
+    int audio_info_bytes;
     int video_diff;
     int video_update_dts;
     int audio_diff;
