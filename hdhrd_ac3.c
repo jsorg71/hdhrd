@@ -23,6 +23,7 @@
 #include <a52dec/a52.h>
 
 #include "hdhrd_ac3.h"
+#include "hdhrd_error.h"
 
 static const int g_ac3_channels[8] = { 2, 1, 2, 3, 3, 4, 4, 5 };
 
@@ -47,28 +48,28 @@ hdhrd_ac3_create(void** obj)
 
     if (obj == NULL)
     {
-        return 1;
+        return HDHRD_ERROR_PARAM;
     }
     self = (struct mycodec_audio*)calloc(sizeof(struct mycodec_audio), 1);
     if (self == NULL)
     {
-        return 2;
+        return HDHRD_ERROR_MEMORY;
     }
     self->state = a52_init(0);
     if (self->state == NULL)
     {
         free(self);
-        return 3;
+        return HDHRD_ERROR_START;
     }
     self->samples = a52_samples(self->state);
     if (self->samples == NULL)
     {
         a52_free(self->state);
         free(self);
-        return 4;
+        return HDHRD_ERROR_START;
     }
     *obj = self;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -79,13 +80,13 @@ hdhrd_ac3_delete(void* obj)
 
     if (obj == NULL)
     {
-        return 0;
+        return HDHRD_ERROR_NONE;
     }
     self = (struct mycodec_audio*)obj;
     a52_free(self->state);
     free(self->cdata);
     free(self);
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /**** the following two functions comes from a52dec */
@@ -152,7 +153,7 @@ hdhrd_ac3_decode(void* obj, void* cdata, int cdata_bytes,
                                &sample_rate, &bit_rate);
             if (len == 0)
             {
-                return 1;
+                return HDHRD_ERROR_START;
             }
             else
             {
@@ -168,10 +169,10 @@ hdhrd_ac3_decode(void* obj, void* cdata, int cdata_bytes,
                 self->cdata = (uint8_t*)malloc(1024 * 1024);
                 if (self->cdata == NULL)
                 {
-                    return 2;
+                    return HDHRD_ERROR_MEMORY;
                 }
                 self->cdata_bytes = 0;
-                return 0;
+                return HDHRD_ERROR_NONE;
             }
         }
         return 3;
@@ -183,7 +184,7 @@ hdhrd_ac3_decode(void* obj, void* cdata, int cdata_bytes,
     }
     if (len < 1)
     {
-        return 4;
+        return HDHRD_ERROR_PARAM;
     }
     memcpy(self->cdata + self->cdata_bytes, cdata, len);
     self->cdata_bytes += len;
@@ -207,11 +208,11 @@ hdhrd_ac3_decode(void* obj, void* cdata, int cdata_bytes,
         level = 1;
         if (a52_frame(self->state, self->cdata, &flags, &level, 384))
         {
-            return 5;
+            return HDHRD_ERROR_DECODE;
         }
         *decoded = 1;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -223,7 +224,7 @@ hdhrd_ac3_get_frame_info(void* obj, int* channels, int* bytes)
     self = (struct mycodec_audio*)obj;
     *channels = self->channels;
     *bytes = 6 * 256 * self->channels * 2;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -237,19 +238,19 @@ hdhrd_ac3_get_frame_data(void* obj, void* data, int data_bytes)
     self = (struct mycodec_audio*)obj;
     if (data_bytes < 6 * 256 * self->channels * 2)
     {
-        return 1;
+        return HDHRD_ERROR_PARAM;
     }
     out_samples = (short*)data;
     for (index = 0; index < 6; index++)
     {
         if (a52_block(self->state) != 0)
         {
-            return 2;
+            return HDHRD_ERROR_DECODE;
         }
         float_to_short(self->samples,
                        out_samples + index * 256 * self->channels,
                        self->channels);
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 

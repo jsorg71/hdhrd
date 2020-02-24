@@ -19,10 +19,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#if 1
-
 #include <time.h>
+
+#include "hdhrd_utils.h"
+#include "hdhrd_error.h"
 
 /*****************************************************************************/
 int
@@ -33,31 +33,13 @@ get_mstime(int* mstime)
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
     {
-        return 1;
+        return HDHRD_ERROR_GETTIME;
     }
     the_tick = ts.tv_nsec / 1000000;
     the_tick += ts.tv_sec * 1000;
     *mstime = the_tick;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
-#else
-
-#include <sys/time.h>
-
-/*****************************************************************************/
-int
-get_mstime(int* mstime)
-{
-    struct timeval tp;
-
-    if (gettimeofday(&tp, 0) != 0)
-    {
-        return 1;
-    }
-    *mstime = (tp.tv_sec * 1000) + (tp.tv_usec / 1000);
-    return 0;
-}
-#endif
 
 /*****************************************************************************/
 int
@@ -94,5 +76,5 @@ hex_dump(const void* data, int bytes)
         offset += thisline;
         line += thisline;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }

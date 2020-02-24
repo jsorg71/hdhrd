@@ -25,6 +25,7 @@
 #define HDHRD_VIDEO_DELAY_MSTIME 3000
 #define HDHRD_AUDIO_DELAY_MSTIME 2000
 #define HDHRD_UDS "/tmp/wtv_hdhrd_%d"
+#define HDHRD_MAX_DECODE_BUF (100 * 1024 * 1024)
 
 struct hdhrd_info
 {

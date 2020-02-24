@@ -22,6 +22,7 @@
 #include <stdarg.h>
 
 #include "hdhrd_utils.h"
+#include "hdhrd_error.h"
 
 static int g_log_level = 4;
 static const char g_log_pre[][8] =
@@ -43,6 +44,10 @@ logln(int log_level, const char* format, ...)
     if (log_level < g_log_level)
     {
         log_line = (char*)malloc(2048);
+        if (log_line == NULL)
+        {
+            return HDHRD_ERROR_MEMORY;
+        }
         va_start(ap, format);
         vsnprintf(log_line, 1024, format, ap);
         va_end(ap);
@@ -52,5 +57,5 @@ logln(int log_level, const char* format, ...)
         printf("%s\n", log_line + 1024);
         free(log_line);
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }

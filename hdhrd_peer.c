@@ -32,6 +32,8 @@
 #include "hdhrd.h"
 #include "hdhrd_peer.h"
 #include "hdhrd_log.h"
+#include "hdhrd_utils.h"
+#include "hdhrd_error.h"
 
 struct peer_info
 {
@@ -77,7 +79,7 @@ hdhrd_peer_delete_one(struct peer_info* peer)
         free(peer->in_s);
     }
     free(peer);
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -127,7 +129,7 @@ hdhrd_peer_remove_one(struct hdhrd_info* hdhrd, struct peer_info** apeer,
     }
     *apeer = peer;
     *alast_peer = last_peer;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -139,19 +141,19 @@ mdhrd_peer_queue_frame(struct hdhrd_info* hdhrd, struct peer_info* peer)
 
     if (hdhrd->fd < 1)
     {
-        return 1;
+        return HDHRD_ERROR_FD;
     }
     out_s = (struct stream*)calloc(1, sizeof(struct stream));
     if (out_s == NULL)
     {
-        return 2;
+        return HDHRD_ERROR_MEMORY;
     }
     out_s->size = 1024 * 1024;
     out_s->data = (char*)malloc(out_s->size);
     if (out_s->data == NULL)
     {
         free(out_s);
-        return 3;
+        return HDHRD_ERROR_MEMORY;
     }
     if (peer->video_frame_count == hdhrd->video_frame_count)
     {
@@ -175,7 +177,7 @@ mdhrd_peer_queue_frame(struct hdhrd_info* hdhrd, struct peer_info* peer)
     out_s->end = out_s->p;
     rv = hdhrd_peer_queue(peer, out_s);
     free(out_s->data);
-    if (rv == 0)
+    if (rv == HDHRD_ERROR_NONE)
     {
         memset(out_s, 0, sizeof(struct stream));
         out_s->fd = hdhrd->fd;
@@ -220,6 +222,7 @@ mdhrd_peer_process_msg_subscribe_audio(struct hdhrd_info* hdhrd,
     unsigned char val8;
 
     (void)hdhrd;
+
     in_uint8(in_s, val8);
     if (val8)
     {
@@ -229,7 +232,7 @@ mdhrd_peer_process_msg_subscribe_audio(struct hdhrd_info* hdhrd,
     {
         peer->flags &= ~1;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -243,7 +246,7 @@ hdhrd_peer_process_msg(struct hdhrd_info* hdhrd, struct peer_info* peer)
 
     (void)hdhrd;
 
-    rv = 0;
+    rv = HDHRD_ERROR_NONE;
     in_s = peer->in_s;
     in_uint32_le(in_s, pdu_code);
     in_uint32_le(in_s, pdu_bytes);
@@ -291,7 +294,7 @@ hdhrd_peer_get_fds(struct hdhrd_info* hdhrd, int* max_fd,
         peer = peer->next;
     }
     *max_fd = lmax_fd;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /******************************************************************************/
@@ -325,11 +328,12 @@ hdhrd_peer_send_fd(int sck, int fd)
     fds = (int *) CMSG_DATA(cmsg);
     *fds = fd;
     size = sendmsg(sck, &msg, 0);
-    if (size < 0)
+    LOGLN10((LOG_INFO, LOGS "size %d", LOGP, size));
+    if (size != 4)
     {
-        return 1;
+        return HDHRD_ERROR_FD;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -347,7 +351,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
     int pdu_bytes;
     int rv;
 
-    rv = 0;
+    rv = HDHRD_ERROR_NONE;
     last_peer = NULL;
     peer = hdhrd->peer_head;
     while (peer != NULL)
@@ -360,14 +364,14 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                 in_s = (struct stream*)calloc(1, sizeof(struct stream));
                 if (in_s == NULL)
                 {
-                    return 1;
+                    return HDHRD_ERROR_MEMORY;
                 }
                 in_s->size = 1024 * 1024;
                 in_s->data = (char*)malloc(in_s->size);
                 if (in_s->data == NULL)
                 {
                     free(in_s);
-                    return 2;
+                    return HDHRD_ERROR_MEMORY;
                 }
                 in_s->p = in_s->data;
                 in_s->end = in_s->data;
@@ -501,7 +505,7 @@ hdhrd_peer_add_fd(struct hdhrd_info* hdhrd, int sck)
     peer = (struct peer_info*)calloc(1, sizeof(struct peer_info));
     if (peer == NULL)
     {
-        return 1;
+        return HDHRD_ERROR_MEMORY;
     }
     peer->sck = sck;
     if (hdhrd->peer_head == NULL)
@@ -514,7 +518,7 @@ hdhrd_peer_add_fd(struct hdhrd_info* hdhrd, int sck)
         hdhrd->peer_tail->next = peer;
         hdhrd->peer_tail = peer;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -533,7 +537,7 @@ hdhrd_peer_cleanup(struct hdhrd_info* hdhrd)
     }
     hdhrd->peer_head = NULL;
     hdhrd->peer_tail = NULL;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -552,7 +556,7 @@ hdhrd_peer_queue_all_video(struct hdhrd_info* hdhrd)
         }
         peer = peer->next;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -573,7 +577,7 @@ hdhrd_peer_queue_all_audio(struct hdhrd_info* hdhrd, struct stream* out_s)
         }
         peer = peer->next;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -586,7 +590,7 @@ hdhrd_peer_queue(struct peer_info* peer, struct stream* out_s)
     lout_s = (struct stream*)calloc(1, sizeof(struct stream));
     if (lout_s == NULL)
     {
-        return 1;
+        return HDHRD_ERROR_MEMORY;
     }
     if (out_s->data == NULL)
     {
@@ -594,7 +598,7 @@ hdhrd_peer_queue(struct peer_info* peer, struct stream* out_s)
         if (lout_s->fd == -1)
         {
             free(lout_s);
-            return 2;
+            return HDHRD_ERROR_DUP;
         }
         LOGLN10((LOG_INFO, LOGS "fd %d", LOGP, lout_s->fd));
     }
@@ -604,14 +608,14 @@ hdhrd_peer_queue(struct peer_info* peer, struct stream* out_s)
         if ((bytes < 1) || (bytes > 1024 * 1024))
         {
             free(lout_s);
-            return 3;
+            return HDHRD_ERROR_PARAM;
         }
         lout_s->size = bytes;
         lout_s->data = (char*)malloc(lout_s->size);
         if (lout_s->data == NULL)
         {
             free(lout_s);
-            return 4;
+            return HDHRD_ERROR_MEMORY;
         }
         lout_s->p = lout_s->data;
         out_uint8p(lout_s, out_s->data, bytes);
@@ -628,6 +632,6 @@ hdhrd_peer_queue(struct peer_info* peer, struct stream* out_s)
         peer->out_s_tail->next = lout_s;
         peer->out_s_tail = lout_s;
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 

@@ -23,12 +23,14 @@
 
 #include <mpeg2dec/mpeg2.h>
 
+#include "hdhrd_error.h"
+
 /*****************************************************************************/
 int
 hdhrd_mpeg2_create(void** obj)
 {
     (void)obj;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -36,7 +38,7 @@ int
 hdhrd_mpeg2_delete(void* obj)
 {
     (void)obj;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -49,7 +51,7 @@ hdhrd_mpeg2_decode(void* obj, void* cdata, int cdata_bytes,
     (void)cdata_bytes;
     (void)cdata_bytes_processed;
     (void)decoded;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -62,7 +64,7 @@ hdhrd_mpeg2_get_frame_info(void* obj, int* width, int* height,
     (void)height;
     (void)format;
     (void)bytes;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -72,6 +74,6 @@ hdhrd_mpeg2_get_frame_data(void* obj, void* data, int data_bytes)
     (void)obj;
     (void)data;
     (void)data_bytes;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
