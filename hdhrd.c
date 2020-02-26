@@ -1135,6 +1135,10 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
                 }
             }
         }
+        if (mstime == -1)
+        {
+            continue;
+        }
         if (get_mstime(&now) != 0)
         {
             LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
