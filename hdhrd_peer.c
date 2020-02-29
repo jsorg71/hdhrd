@@ -196,17 +196,18 @@ mdhrd_peer_process_msg_request_video_frame(struct hdhrd_info* hdhrd,
     int rv;
 
     (void)in_s;
-    if (peer->flags & 2)
+
+    if (peer->flags & HDHRD_PEER_REQUEST_VIDEO)
     {
         LOGLN10((LOG_INFO, LOGS "already requested", LOGP));
-        return 0;
+        return HDHRD_ERROR_NONE;
     }
     if ((hdhrd->fd < 1) ||
         (peer->video_frame_count == hdhrd->video_frame_count))
     {
         LOGLN10((LOG_INFO, LOGS "set to get next frame", LOGP));
-        peer->flags |= 2;
-        return 0;
+        peer->flags |= HDHRD_PEER_REQUEST_VIDEO;
+        return HDHRD_ERROR_NONE;
     }
     LOGLN10((LOG_INFO, LOGS "sending frame now", LOGP));
     rv = mdhrd_peer_queue_frame(hdhrd, peer);
@@ -226,11 +227,11 @@ mdhrd_peer_process_msg_subscribe_audio(struct hdhrd_info* hdhrd,
     in_uint8(in_s, val8);
     if (val8)
     {
-        peer->flags |= 1;
+        peer->flags |= HDHRD_PEER_SUBSCRIBE_AUDIO;
     }
     else
     {
-        peer->flags &= ~1;
+        peer->flags &= ~HDHRD_PEER_SUBSCRIBE_AUDIO;
     }
     return HDHRD_ERROR_NONE;
 }
@@ -256,7 +257,7 @@ hdhrd_peer_process_msg(struct hdhrd_info* hdhrd, struct peer_info* peer)
     {
         LOGLN0((LOG_INFO, LOGS "bad pdu_bytes, sck %d pdu_code %d "
                 "pdu_bytes %d", LOGP, peer->sck, pdu_code, pdu_bytes));
-        return 1;
+        return HDHRD_ERROR_RANGE;
     }
     switch (pdu_code)
     {
@@ -389,7 +390,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                 LOGLN0((LOG_ERROR, LOGS "recv failed sck %d reed %d",
                         LOGP, peer->sck, reed));
                 hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                rv = 1;
+                rv = HDHRD_ERROR_FD;
                 continue;
             }
             else
@@ -408,7 +409,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                             LOGLN0((LOG_ERROR, LOGS "bad pdu_bytes %d",
                                     LOGP, pdu_bytes));
                             hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                            rv = 1;
+                            rv = HDHRD_ERROR_FD;
                             continue;
                         }
                         in_s->end = in_s->data + pdu_bytes;
@@ -422,7 +423,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                             LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_process_msg "
                                    "failed", LOGP));
                             hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                            rv = 1;
+                            rv = HDHRD_ERROR_FD;
                             continue;
                         }
                         in_s->p = in_s->data;
@@ -443,7 +444,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                         LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_send_fd failed "
                                 "fd %d", LOGP, out_s->fd));
                         hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                        rv = 1;
+                        rv = HDHRD_ERROR_FD;
                         continue;
                     }
                     LOGLN10((LOG_DEBUG, LOGS "hdhrd_peer_send_fd ok", LOGP));
@@ -468,7 +469,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                         /* error */
                         LOGLN0((LOG_ERROR, LOGS "send failed", LOGP));
                         hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                        rv = 1;
+                        rv = HDHRD_ERROR_FD;
                         continue;
                     }
                     LOGLN10((LOG_DEBUG, LOGS "send ok, sent %d", LOGP, sent));
@@ -549,10 +550,10 @@ hdhrd_peer_queue_all_video(struct hdhrd_info* hdhrd)
     peer = hdhrd->peer_head;
     while (peer != NULL)
     {
-        if (peer->flags & 2)
+        if (peer->flags & HDHRD_PEER_REQUEST_VIDEO)
         {
             mdhrd_peer_queue_frame(hdhrd, peer);
-            peer->flags &= ~2;
+            peer->flags &= ~HDHRD_PEER_REQUEST_VIDEO;
         }
         peer = peer->next;
     }
@@ -563,16 +564,18 @@ hdhrd_peer_queue_all_video(struct hdhrd_info* hdhrd)
 int
 hdhrd_peer_queue_all_audio(struct hdhrd_info* hdhrd, struct stream* out_s)
 {
+    int rv;
     struct peer_info* peer;
 
     peer = hdhrd->peer_head;
     while (peer != NULL)
     {
-        if (peer->flags & 1)
+        if (peer->flags & HDHRD_PEER_SUBSCRIBE_AUDIO)
         {
-            if (hdhrd_peer_queue(peer, out_s) != 0)
+            rv = hdhrd_peer_queue(peer, out_s);
+            if (rv != HDHRD_ERROR_NONE)
             {
-                return 1;
+                return rv;
             }
         }
         peer = peer->next;

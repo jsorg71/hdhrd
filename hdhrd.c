@@ -163,7 +163,7 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
     vi = hdhrd->video_head;
     if (vi != NULL)
     {
-        if (get_mstime(&now) == 0)
+        if (get_mstime(&now) == HDHRD_ERROR_NONE)
         {
             LOGLN10((LOG_INFO, LOGS "vi %p pts %10.10u dts %10.10u "
                      "now %10.10u", LOGP, vi, vi->pts, vi->dts, now));
@@ -269,7 +269,7 @@ hdhrd_process_ai(struct hdhrd_info* hdhrd)
     ai = hdhrd->audio_head;
     if (ai != NULL)
     {
-        if (get_mstime(&now) == 0)
+        if (get_mstime(&now) == HDHRD_ERROR_NONE)
         {
             LOGLN10((LOG_INFO, LOGS "ai %p pts %10.10u dts %10.10u "
                      "now %10.10u", LOGP, ai, ai->pts, ai->dts, now));
@@ -403,7 +403,7 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     if (abs(dts - hdhrd->video_update_dts) > HDHRD_SYNC_MSTIME)
     {
         hdhrd->video_update_dts = dts;
-        if (get_mstime(&now) == 0)
+        if (get_mstime(&now) == HDHRD_ERROR_NONE)
         {
             hdhrd->video_diff = (dts - now) - HDHRD_VIDEO_DELAY_MSTIME;
             LOGLN10((LOG_INFO, LOGS "video_diff %10.10d", LOGP,
@@ -500,7 +500,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     if (abs(dts - hdhrd->audio_update_dts) > HDHRD_SYNC_MSTIME)
     {
         hdhrd->audio_update_dts = dts;
-        if (get_mstime(&now) == 0)
+        if (get_mstime(&now) == HDHRD_ERROR_NONE)
         {
             hdhrd->audio_diff = (dts - now) - HDHRD_AUDIO_DELAY_MSTIME;
             LOGLN10((LOG_INFO, LOGS "audio_diff %10.10d", LOGP,
@@ -1063,7 +1063,7 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
         }
         else
         {
-            if (get_mstime(&now) != 0)
+            if (get_mstime(&now) != HDHRD_ERROR_NONE)
             {
                 LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
                 break;
@@ -1094,7 +1094,7 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
                 LOGLN0((LOG_INFO, LOGS "got connection sck %d", LOGP, sck));
                 if (sck != -1)
                 {
-                    if (hdhrd_peer_add_fd(hdhrd, sck) != 0)
+                    if (hdhrd_peer_add_fd(hdhrd, sck) != HDHRD_ERROR_NONE)
                     {
                         LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_add_fd failed",
                                 LOGP));
@@ -1118,7 +1118,7 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
                 }
             }
             error = hdhrd_peer_check_fds(hdhrd, &rfds, &wfds);
-            if (error != 0)
+            if (error != HDHRD_ERROR_NONE)
             {
                 LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_check_fds rv %d",
                         LOGP, error));
@@ -1139,7 +1139,7 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
         {
             continue;
         }
-        if (get_mstime(&now) != 0)
+        if (get_mstime(&now) != HDHRD_ERROR_NONE)
         {
             LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
             break;
@@ -1260,7 +1260,7 @@ main(int argc, char** argv)
     {
         if (hdhrd->is_running)
         {
-            if (get_mstime(&now) != 0)
+            if (get_mstime(&now) != HDHRD_ERROR_NONE)
             {
                 LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
                 break;
