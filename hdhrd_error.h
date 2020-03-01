@@ -19,18 +19,19 @@
 #ifndef _HDHRD_ERROR_H_
 #define _HDHRD_ERROR_H_
 
-#define HDHRD_ERROR_NONE        0
-#define HDHRD_ERROR_MEMORY      1
-#define HDHRD_ERROR_DUP         2
-#define HDHRD_ERROR_PARAM       3
-#define HDHRD_ERROR_RANGE       4
-#define HDHRD_ERROR_NOPTSDTS    5
-#define HDHRD_ERROR_CREATE      6
-#define HDHRD_ERROR_START       7
-#define HDHRD_ERROR_GETTIME     8
-#define HDHRD_ERROR_NOTREADY    9
-#define HDHRD_ERROR_FD          10
-#define HDHRD_ERROR_DECODE      11
+#define HDHRD_ERROR_NONE            0
+#define HDHRD_ERROR_MEMORY          1
+#define HDHRD_ERROR_DUP             2
+#define HDHRD_ERROR_PARAM           3
+#define HDHRD_ERROR_RANGE           4
+#define HDHRD_ERROR_NOPTSDTS        5
+#define HDHRD_ERROR_CREATE          6
+#define HDHRD_ERROR_START           7
+#define HDHRD_ERROR_GETTIME         8
+#define HDHRD_ERROR_NOTREADY        9
+#define HDHRD_ERROR_FD              10
+#define HDHRD_ERROR_DECODE          11
+#define HDHRD_ERROR_PEER_REMOVED    12
 
 #endif
 

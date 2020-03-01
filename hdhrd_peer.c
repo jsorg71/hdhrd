@@ -305,7 +305,7 @@ hdhrd_peer_send_fd(int sck, int fd)
     ssize_t size;
     struct msghdr msg;
     struct iovec iov;
-    union
+    union _cmsgu
     {
         struct cmsghdr cmsghdr;
         char control[CMSG_SPACE(sizeof(int))];
@@ -351,6 +351,7 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
     int reed;
     int pdu_bytes;
     int rv;
+    int error;
 
     rv = HDHRD_ERROR_NONE;
     last_peer = NULL;
@@ -389,8 +390,12 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                 /* error */
                 LOGLN0((LOG_ERROR, LOGS "recv failed sck %d reed %d",
                         LOGP, peer->sck, reed));
-                hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                rv = HDHRD_ERROR_FD;
+                error = hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
+                if (error != HDHRD_ERROR_NONE)
+                {
+                    return error;
+                }
+                rv = HDHRD_ERROR_PEER_REMOVED;
                 continue;
             }
             else
@@ -408,8 +413,12 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                         {
                             LOGLN0((LOG_ERROR, LOGS "bad pdu_bytes %d",
                                     LOGP, pdu_bytes));
-                            hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                            rv = HDHRD_ERROR_FD;
+                            error = hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
+                            if (error != HDHRD_ERROR_NONE)
+                            {
+                                return error;
+                            }
+                            rv = HDHRD_ERROR_PEER_REMOVED;
                             continue;
                         }
                         in_s->end = in_s->data + pdu_bytes;
@@ -418,12 +427,17 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                     {
                         /* finished reading in header and payload */
                         in_s->p = in_s->data;
-                        if (hdhrd_peer_process_msg(hdhrd, peer) != 0)
+                        rv = hdhrd_peer_process_msg(hdhrd, peer);
+                        if (rv != HDHRD_ERROR_NONE)
                         {
                             LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_process_msg "
                                    "failed", LOGP));
-                            hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                            rv = HDHRD_ERROR_FD;
+                            error = hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
+                            if (error != HDHRD_ERROR_NONE)
+                            {
+                                return error;
+                            }
+                            rv = HDHRD_ERROR_PEER_REMOVED;
                             continue;
                         }
                         in_s->p = in_s->data;
@@ -438,13 +452,18 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
             {
                 if (out_s->data == NULL)
                 {
-                    if (hdhrd_peer_send_fd(peer->sck, out_s->fd) != 0)
+                    rv = hdhrd_peer_send_fd(peer->sck, out_s->fd);
+                    if (rv != HDHRD_ERROR_NONE)
                     {
                         /* error */
                         LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_send_fd failed "
                                 "fd %d", LOGP, out_s->fd));
-                        hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                        rv = HDHRD_ERROR_FD;
+                        error = hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
+                        if (error != HDHRD_ERROR_NONE)
+                        {
+                            return error;
+                        }
+                        rv = HDHRD_ERROR_PEER_REMOVED;
                         continue;
                     }
                     LOGLN10((LOG_DEBUG, LOGS "hdhrd_peer_send_fd ok", LOGP));
@@ -468,8 +487,12 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
                     {
                         /* error */
                         LOGLN0((LOG_ERROR, LOGS "send failed", LOGP));
-                        hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
-                        rv = HDHRD_ERROR_FD;
+                        error = hdhrd_peer_remove_one(hdhrd, &peer, &last_peer);
+                        if (error != HDHRD_ERROR_NONE)
+                        {
+                            return error;
+                        }
+                        rv = HDHRD_ERROR_PEER_REMOVED;
                         continue;
                     }
                     LOGLN10((LOG_DEBUG, LOGS "send ok, sent %d", LOGP, sent));
