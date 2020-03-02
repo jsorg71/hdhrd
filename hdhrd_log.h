@@ -19,10 +19,13 @@
 #ifndef _HDHRD_LOG_H_
 #define _HDHRD_LOG_H_
 
-#define LOG_ERROR 0
-#define LOG_WARN  1
-#define LOG_INFO  2
-#define LOG_DEBUG 3
+#define LOG_FLAG_FILE   1
+#define LOG_FLAG_STDOUT 2
+
+#define LOG_ERROR   0
+#define LOG_WARN    1
+#define LOG_INFO    2
+#define LOG_DEBUG   3
 
 #define LOGS "[%s][%d][%s]:"
 #define LOGP __FILE__, __LINE__, __FUNCTION__
@@ -45,6 +48,10 @@
 #define LOGLN10(_args)
 #endif
 
+int
+log_init(int flags, int log_level, const char* filename);
+int
+log_deinit(void);
 int
 logln(int log_level, const char* format, ...);
 

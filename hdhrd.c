@@ -72,6 +72,9 @@ struct settings_info
     char hdhrd_device_name[256];
     char hdhrd_channel_name[256];
     char hdhrd_program_name[256];
+    char hdhrd_log_filename[256];
+    int daemonize;
+    int pad0;
 };
 
 /*****************************************************************************/
@@ -774,7 +777,7 @@ sig_pipe(int sig)
 
 /*****************************************************************************/
 static int
-process_args(int argc, char** argv, struct settings_info* setting)
+process_args(int argc, char** argv, struct settings_info* settings)
 {
     int index;
 
@@ -783,17 +786,21 @@ process_args(int argc, char** argv, struct settings_info* setting)
         if (strcmp("-c", argv[index]) == 0)
         {
             index++;
-            strncpy(setting->hdhrd_channel_name, argv[index], 255);
+            strncpy(settings->hdhrd_channel_name, argv[index], 255);
         }
         else if (strcmp("-d", argv[index]) == 0)
         {
             index++;
-            strncpy(setting->hdhrd_device_name, argv[index], 255);
+            strncpy(settings->hdhrd_device_name, argv[index], 255);
         }
         else if (strcmp("-p", argv[index]) == 0)
         {
             index++;
-            strncpy(setting->hdhrd_program_name, argv[index], 255);
+            strncpy(settings->hdhrd_program_name, argv[index], 255);
+        }
+        else if (strcmp("-D", argv[index]) == 0)
+        {
+            settings->daemonize = 1;
         }
         else
         {
@@ -1162,6 +1169,7 @@ main(int argc, char** argv)
     int hdhrd_viai_mstime;
     int hdhrd_recv_mstime;
     int hdhrd_mstime;
+    int pid;
     struct sockaddr_un s;
     socklen_t sock_len;
     struct settings_info* settings;
@@ -1178,6 +1186,43 @@ main(int argc, char** argv)
         free(settings);
         return 0;
     }
+
+    if (settings->daemonize)
+    {
+        error = fork();
+        if (error == 0)
+        {
+            close(0);
+            close(1);
+            close(2);
+            open("/dev/null", O_RDONLY);
+            open("/dev/null", O_WRONLY);
+            open("/dev/null", O_WRONLY);
+            pid = getpid();
+            if (settings->hdhrd_log_filename[0] == 0)
+            {
+                snprintf(settings->hdhrd_log_filename, 255,
+                         "/tmp/hdhrd_%d.log", pid);
+            }
+            log_init(LOG_FLAG_FILE, 4, settings->hdhrd_log_filename);
+        }
+        else if (error > 0)
+        {
+            printf("start daemon with pid %d\n", error);
+            return 0;
+        }
+        else
+        {
+            printf("fork failed\n");
+            return 1;
+        }
+    }
+    else
+    {
+        pid = getpid();
+        log_init(LOG_FLAG_STDOUT, 4, NULL);
+    }
+
     hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
     if (hdhrd == NULL)
     {
@@ -1186,6 +1231,7 @@ main(int argc, char** argv)
         return 1;
     }
     signal(SIGINT, sig_int);
+    signal(SIGTERM, sig_int);
     signal(SIGPIPE, sig_pipe);
     hdhrd->yami_fd = open("/dev/dri/renderD128", O_RDWR);
     if (hdhrd->yami_fd == -1)
@@ -1202,7 +1248,7 @@ main(int argc, char** argv)
         LOGLN0((LOG_ERROR, LOGS "yami_init failed %d", LOGP, error));
     }
 
-    snprintf(settings->hdhrd_uds, 255, HDHRD_UDS, getpid());
+    snprintf(settings->hdhrd_uds, 255, HDHRD_UDS, pid);
     unlink(settings->hdhrd_uds);
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
     if (hdhrd->listener == -1)
@@ -1302,5 +1348,6 @@ main(int argc, char** argv)
     free(settings);
     close(g_term_pipe[0]);
     close(g_term_pipe[1]);
+    log_deinit();
     return 0;
 }
