@@ -1186,7 +1186,6 @@ main(int argc, char** argv)
         free(settings);
         return 0;
     }
-
     if (settings->daemonize)
     {
         error = fork();
@@ -1209,11 +1208,13 @@ main(int argc, char** argv)
         else if (error > 0)
         {
             printf("start daemon with pid %d\n", error);
+            free(settings);
             return 0;
         }
         else
         {
             printf("fork failed\n");
+            free(settings);
             return 1;
         }
     }
@@ -1222,7 +1223,6 @@ main(int argc, char** argv)
         pid = getpid();
         log_init(LOG_FLAG_STDOUT, 4, NULL);
     }
-
     hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
     if (hdhrd == NULL)
     {
