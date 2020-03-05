@@ -56,6 +56,12 @@ log_init(int flags, int log_level, const char* filename)
         {
             return HDHRD_ERROR_LOG;
         }
+        if (chmod(filename, 0666) != 0)
+        {
+            close(g_log_fd);
+            g_log_fd = -1;
+            return HDHRD_ERROR_LOG;
+        }
         strncpy(g_log_filename, filename, 255);
         g_log_filename[255] = 0;
     }
@@ -93,17 +99,23 @@ logln(int log_level, const char* format, ...)
         va_start(ap, format);
         vsnprintf(log_line, 1024, format, ap);
         va_end(ap);
-        get_mstime(&mstime);
+        if (get_mstime(&mstime) != HDHRD_ERROR_NONE)
+        {
+            free(log_line);
+            return HDHRD_ERROR_GETTIME;
+        }
         len = snprintf(log_line + 1024, 1024, "[%10.10u][%s]%s\n",
                        mstime, g_log_pre[log_level % 4], log_line);
         if (g_log_flags & LOG_FLAG_FILE)
         {
             if (g_log_fd == -1)
             {
+                free(log_line);
                 return HDHRD_ERROR_LOG;
             }
             if (len != write(g_log_fd, log_line + 1024, len))
             {
+                free(log_line);
                 return HDHRD_ERROR_LOG;
             }
         }

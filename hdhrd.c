@@ -1281,7 +1281,7 @@ main(int argc, char** argv)
         free(hdhrd);
         return 1;
     }
-    error = chmod(settings->hdhrd_uds, 0777);
+    error = chmod(settings->hdhrd_uds, 0666);
     if (error != 0)
     {
         LOGLN0((LOG_ERROR, LOGS "chmod failed for %s",
