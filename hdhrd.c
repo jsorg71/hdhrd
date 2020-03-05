@@ -1306,13 +1306,31 @@ main(int argc, char** argv)
     {
         if (hdhrd->is_running)
         {
-            if (get_mstime(&now) != HDHRD_ERROR_NONE)
+            error = get_mstime(&now);
+            if (error != HDHRD_ERROR_NONE)
             {
                 LOGLN0((LOG_ERROR, LOGS "get_mstime failed", LOGP));
                 break;
             }
-            hdhrd_process_vi_ai(hdhrd);
-            hdhrd_process_stream_recv(hdhrd);
+            error = hdhrd_process_vi_ai(hdhrd);
+            if (error == HDHRD_ERROR_NOTREADY)
+            {
+                LOGLN10((LOG_DEBUG, LOGS "hdhrd_process_vi_ai "
+                         "HDHRD_ERROR_NOTREADY", LOGP));
+            }
+            else if (error != HDHRD_ERROR_NONE)
+            {
+                LOGLN0((LOG_ERROR, LOGS "hdhrd_process_vi_ai failed error %d",
+                        LOGP, error));
+                break;
+            }
+            error = hdhrd_process_stream_recv(hdhrd);
+            if (error != HDHRD_ERROR_NONE)
+            {
+                LOGLN0((LOG_ERROR, LOGS "hdhrd_process_stream_recv failed "
+                        "error %d", LOGP, error));
+                break;
+            }
             hdhrd_recv_mstime = now + HDHRD_SELECT_MSTIME;
             hdhrd_mstime = hdhrd_recv_mstime;
             error = hdhrd_get_viai_mstime(hdhrd, &hdhrd_viai_mstime);
@@ -1324,15 +1342,21 @@ main(int argc, char** argv)
                 }
             }
             LOGLN10((LOG_INFO, LOGS "hdhrd_mstime %d", LOGP, hdhrd_mstime));
-            if (hdhrd_process_fds(hdhrd, settings, hdhrd_mstime) != 0)
+            error = hdhrd_process_fds(hdhrd, settings, hdhrd_mstime);
+            if (error != HDHRD_ERROR_NONE)
             {
+                LOGLN0((LOG_ERROR, LOGS "hdhrd_process_fds failed error %d",
+                        LOGP, error));
                 break;
             }
         }
         else
         {
-            if (hdhrd_process_fds(hdhrd, settings, -1) != 0)
+            error = hdhrd_process_fds(hdhrd, settings, -1);
+            if (error != HDHRD_ERROR_NONE)
             {
+                LOGLN0((LOG_ERROR, LOGS "hdhrd_process_fds failed error %d",
+                        LOGP, error));
                 break;
             }
         }
