@@ -164,7 +164,7 @@ mdhrd_peer_queue_frame(struct hdhrd_info* hdhrd, struct peer_info* peer)
     }
     peer->video_frame_count = hdhrd->video_frame_count;
     out_s->p = out_s->data;
-    out_uint32_le(out_s, 4);
+    out_uint32_le(out_s, HDHRD_PDU_CODE_VIDEO);
     out_uint32_le(out_s, 40);
     out_uint32_le(out_s, hdhrd->fd_time);
     out_uint8s(out_s, 4);
@@ -261,10 +261,10 @@ hdhrd_peer_process_msg(struct hdhrd_info* hdhrd, struct peer_info* peer)
     }
     switch (pdu_code)
     {
-        case 1:
+        case HDHRD_PDU_CODE_SUBSCRIBE_AUDIO:
             rv = mdhrd_peer_process_msg_subscribe_audio(hdhrd, peer, in_s);
             break;
-        case 3:
+        case HDHRD_PDU_CODE_REQUEST_VIDEO_FRAME:
             rv = mdhrd_peer_process_msg_request_video_frame(hdhrd, peer, in_s);
             break;
     }

@@ -27,6 +27,11 @@
 #define HDHRD_UDS "/tmp/wtv_hdhrd_%d"
 #define HDHRD_MAX_DECODE_BUF (100 * 1024 * 1024)
 
+#define HDHRD_PDU_CODE_SUBSCRIBE_AUDIO      1
+#define HDHRD_PDU_CODE_AUDIO                2
+#define HDHRD_PDU_CODE_REQUEST_VIDEO_FRAME  3
+#define HDHRD_PDU_CODE_VIDEO                4
+
 struct hdhrd_info
 {
     struct hdhomerun_device_t* hdhr;

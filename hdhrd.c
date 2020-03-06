@@ -332,7 +332,7 @@ hdhrd_process_ai(struct hdhrd_info* hdhrd)
                         if (out_s->data != NULL)
                         {
                             out_s->p = out_s->data;
-                            out_uint32_le(out_s, 2);
+                            out_uint32_le(out_s, HDHRD_PDU_CODE_AUDIO);
                             out_uint32_le(out_s, 24 + bytes);
                             out_uint32_le(out_s, ai->pts);
                             out_uint8s(out_s, 4);
