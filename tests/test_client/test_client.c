@@ -33,11 +33,12 @@ main(int argc, char** argv)
     out_s = (struct stream*)calloc(1, sizeof(struct stream));
     out_s->data = (char*)malloc(1024);
     out_s->p = out_s->data;
-    out_uint32_le(out_s, 1);
+    out_uint32_le(out_s, 1); /* msg_subscribe_audio */
     out_uint32_le(out_s, 9);
+    out_uint8(out_s, 1);
     memset(&s, 0, sizeof(struct sockaddr_un));
     s.sun_family = AF_UNIX;
-    strncpy(s.sun_path, "/tmp/wtv_hdhrd0", sizeof(s.sun_path));
+    strncpy(s.sun_path, "/tmp/wtv_hdhrd_1447", sizeof(s.sun_path));
     s.sun_path[sizeof(s.sun_path) - 1] = 0;
     connect(sck, (struct sockaddr*)&s, sizeof(struct sockaddr_un));
     send(sck, out_s->data, 9, 0);
