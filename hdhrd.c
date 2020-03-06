@@ -179,7 +179,6 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
                     return HDHRD_ERROR_NOTREADY;
                 }
             }
-            hdhrd->last_video_check_mstime = now;
         }
         s = vi->s;
         if ((hdhrd->yami == NULL) && (vi->flags0 & FLAGS0_RANDOM_ACCESS))
@@ -895,7 +894,6 @@ hdhrd_get_viai_mstime(struct hdhrd_info* hdhrd, int* mstime)
     {
         if (hdhrd->audio_head == NULL)
         {
-            lmstime = hdhrd->video_head->dts - hdhrd->video_diff;
             lmstime = hdhrd->video_head->now_dts;
         }
         else

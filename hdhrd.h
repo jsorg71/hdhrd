@@ -59,8 +59,6 @@ struct hdhrd_info
     int video_frame_count;
     int last_decode_mstime;
     int is_running;
-    int last_video_check_mstime;
-    int pad0;
 };
 
 #endif
