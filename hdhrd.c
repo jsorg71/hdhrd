@@ -172,9 +172,12 @@ hdhrd_process_vi(struct hdhrd_info* hdhrd)
                      "now %10.10u", LOGP, vi, vi->pts, vi->dts, now));
             if (now < vi->now_dts)
             {
-                LOGLN10((LOG_INFO, LOGS "not yet %d", LOGP,
-                         vi->dts - hdhrd->video_diff - now));
-                return HDHRD_ERROR_NOTREADY;
+                if (abs(now - vi->now_dts) < HDHRD_VIDEO_DELAY_MSTIME)
+                {
+                    LOGLN10((LOG_INFO, LOGS "not yet %d", LOGP,
+                             vi->dts - hdhrd->video_diff - now));
+                    return HDHRD_ERROR_NOTREADY;
+                }
             }
             hdhrd->last_video_check_mstime = now;
         }
@@ -278,9 +281,12 @@ hdhrd_process_ai(struct hdhrd_info* hdhrd)
                      "now %10.10u", LOGP, ai, ai->pts, ai->dts, now));
             if (now < ai->now_dts)
             {
-                LOGLN10((LOG_INFO, LOGS "not yet %d", LOGP,
-                         ai->dts - hdhrd->audio_diff - now));
-                return HDHRD_ERROR_NOTREADY;
+                if (abs(now - ai->now_dts) < HDHRD_AUDIO_DELAY_MSTIME)
+                {
+                    LOGLN10((LOG_INFO, LOGS "not yet %d", LOGP,
+                             ai->dts - hdhrd->audio_diff - now));
+                    return HDHRD_ERROR_NOTREADY;
+                }
             }
         }
         s = ai->s;
