@@ -1095,7 +1095,7 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
             if (FD_ISSET(g_term_pipe[0], &rfds))
             {
                 LOGLN0((LOG_INFO, LOGS "g_term_pipe set", LOGP));
-                rv = 1;
+                rv = HDHRD_ERROR_TERM;
                 break;
             }
             if (FD_ISSET(hdhrd->listener, &rfds))
@@ -1131,7 +1131,7 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
             error = hdhrd_peer_check_fds(hdhrd, &rfds, &wfds);
             if (error != HDHRD_ERROR_NONE)
             {
-                LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_check_fds rv %d",
+                LOGLN0((LOG_ERROR, LOGS "hdhrd_peer_check_fds error %d",
                         LOGP, error));
                 if (hdhrd->peer_head == NULL)
                 {

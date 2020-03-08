@@ -33,6 +33,7 @@
 #define HDHRD_ERROR_DECODE          11
 #define HDHRD_ERROR_PEER_REMOVED    12
 #define HDHRD_ERROR_LOG             13
+#define HDHRD_ERROR_TERM            14
 
 #endif
 
