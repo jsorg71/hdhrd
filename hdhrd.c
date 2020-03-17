@@ -69,6 +69,7 @@ struct audio_info
 struct settings_info
 {
     char hdhrd_uds[256];
+    char hdhrd_uds_name[256];
     char hdhrd_device_name[256];
     char hdhrd_channel_name[256];
     char hdhrd_program_name[256];
@@ -786,9 +787,18 @@ process_args(int argc, char** argv, struct settings_info* settings)
 {
     int index;
 
+    if (argc < 2)
+    {
+        return HDHRD_ERROR_PARAM;
+    }
+    strncpy(settings->hdhrd_uds_name, HDHRD_UDS, 255);
     for (index = 1; index < argc; index++)
     {
-        if (strcmp("-c", argv[index]) == 0)
+        if (strcmp("-D", argv[index]) == 0)
+        {
+            settings->daemonize = 1;
+        }
+        else if (strcmp("-c", argv[index]) == 0)
         {
             index++;
             strncpy(settings->hdhrd_channel_name, argv[index], 255);
@@ -798,14 +808,15 @@ process_args(int argc, char** argv, struct settings_info* settings)
             index++;
             strncpy(settings->hdhrd_device_name, argv[index], 255);
         }
+        else if (strcmp("-n", argv[index]) == 0)
+        {
+            index++;
+            strncpy(settings->hdhrd_uds_name, argv[index], 255);
+        }
         else if (strcmp("-p", argv[index]) == 0)
         {
             index++;
             strncpy(settings->hdhrd_program_name, argv[index], 255);
-        }
-        else if (strcmp("-D", argv[index]) == 0)
-        {
-            settings->daemonize = 1;
         }
         else
         {
@@ -819,8 +830,16 @@ process_args(int argc, char** argv, struct settings_info* settings)
 static int
 printf_help(int argc, char** argv)
 {
-    (void)argc;
-    (void)argv;
+    if (argc < 1)
+    {
+        return HDHRD_ERROR_NONE;
+    }
+    printf("%s: command line options\n", argv[0]);
+    printf("    -D      run daemon, example -D\n");
+    printf("    -c      channel name, example -c 44\n");
+    printf("    -d      device name, example -d 103BF3FB-0\n");
+    printf("    -n      uds name, %%d will be pid, example -n %s\n", HDHRD_UDS);
+    printf("    -p      program name, example -p 3\n");
     return HDHRD_ERROR_NONE;
 }
 
@@ -1251,8 +1270,7 @@ main(int argc, char** argv)
     {
         LOGLN0((LOG_ERROR, LOGS "yami_init failed %d", LOGP, error));
     }
-
-    snprintf(settings->hdhrd_uds, 255, HDHRD_UDS, pid);
+    snprintf(settings->hdhrd_uds, 255, settings->hdhrd_uds_name, pid);
     unlink(settings->hdhrd_uds);
     hdhrd->listener = socket(PF_LOCAL, SOCK_STREAM, 0);
     if (hdhrd->listener == -1)
