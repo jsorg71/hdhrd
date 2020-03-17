@@ -24,6 +24,7 @@
 
 #include "mpeg_ts.h"
 #include "hdhrd_log.h"
+#include "hdhrd_error.h"
 
 /*****************************************************************************/
 static int
@@ -36,7 +37,7 @@ read_pcr(const void* ptr, int* pcr)
     t1 = (pui8[0] << 24) | (pui8[1] << 16) | (pui8[2] << 8) | pui8[3];
     t1 = t1 / 45;
     *pcr = t1;
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -66,14 +67,14 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                     s = (struct stream*)calloc(1, sizeof(struct stream));
                     if (s == NULL)
                     {
-                        return 4;
+                        return HDHRD_ERROR_MEMORY;
                     }
                     s->size = 1024 * 1024;
                     s->data = (char*)malloc(s->size);
                     if (s->data == NULL)
                     {
                         free(s);
-                        return 5;
+                        return HDHRD_ERROR_MEMORY;
                     }
                     pi->s = s;
                 }
@@ -83,12 +84,12 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                     {
                         s->p = s->data;
                         error = (cb->procs[index])(pi, udata);
-                        if (error != 0)
+                        if (error != HDHRD_ERROR_NONE)
                         {
                             LOGLN0((LOG_ERROR, LOGS "cb for pid %d "
                                     "returned %d", LOGP, mpegts->pid,
                                     error));
-                            return 10;
+                            return error;
                         }
                     }
                 }
@@ -119,7 +120,7 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
                     else if (!s_check_rem_out(s, cb_bytes))
                     {
                         /* not enough space for new data */
-                        return 6;
+                        return HDHRD_ERROR_RANGE;
                     }
                     else
                     {
@@ -142,7 +143,7 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
             }
         }
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
 
 /*****************************************************************************/
@@ -173,31 +174,31 @@ process_mpeg_ts_packet(const void* data, int bytes,
     if (mpegts.sync_byte != 0x47)
     {
         /* must be parse error */
-        return 1;
+        return HDHRD_ERROR_TS;
     }
     if (mpegts.transport_error_indicator)
     {
         LOGLN0((LOG_ERROR, LOGS "transport_error_indicator set, pid %d",
                 LOGP, mpegts.pid));
-        return 2;
+        return HDHRD_ERROR_TS;
     }
     if (mpegts.scrambling_control != 0)
     {
         /* not supported */
-        return 3;
+        return HDHRD_ERROR_NOT_SUPPORTED;
     }
     if (mpegts.adaptation_field_flag)
     {
         if (!s_check_rem(&ls, 1))
         {
-            return 4;
+            return HDHRD_ERROR_RANGE;
         }
         in_uint8(&ls, mpegts.adaptation_field_length);
         if (mpegts.adaptation_field_length > 0)
         {
             if (!s_check_rem(&ls, mpegts.adaptation_field_length))
             {
-                return 5;
+                return HDHRD_ERROR_RANGE;
             }
             holdp = ls.p;
             in_uint8(&ls, header);
@@ -214,7 +215,7 @@ process_mpeg_ts_packet(const void* data, int bytes,
                 /* 48 bit */
                 if (!s_check_rem(&ls, 6))
                 {
-                    return 6;
+                    return HDHRD_ERROR_RANGE;
                 }
                 in_uint8p(&ls, mpegts.ppcr, 6);
             }
@@ -239,5 +240,5 @@ mpeg_ts_cleanup(struct tmpegts_cb* cb)
             cb->pis[index].s = NULL;
         }
     }
-    return 0;
+    return HDHRD_ERROR_NONE;
 }
