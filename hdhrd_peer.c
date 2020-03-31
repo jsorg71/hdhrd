@@ -23,6 +23,8 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/un.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include <hdhomerun.h>
 
@@ -133,7 +135,7 @@ hdhrd_peer_remove_one(struct hdhrd_info* hdhrd, struct peer_info** apeer,
 
 /*****************************************************************************/
 static int
-mdhrd_peer_queue_frame(struct hdhrd_info* hdhrd, struct peer_info* peer)
+hdhrd_peer_queue_frame(struct hdhrd_info* hdhrd, struct peer_info* peer)
 {
     struct stream* out_s;
     int rv;
@@ -188,7 +190,7 @@ mdhrd_peer_queue_frame(struct hdhrd_info* hdhrd, struct peer_info* peer)
 
 /*****************************************************************************/
 static int
-mdhrd_peer_process_msg_request_video_frame(struct hdhrd_info* hdhrd,
+hdhrd_peer_process_msg_request_video_frame(struct hdhrd_info* hdhrd,
                                            struct peer_info* peer,
                                            struct stream* in_s)
 {
@@ -209,13 +211,13 @@ mdhrd_peer_process_msg_request_video_frame(struct hdhrd_info* hdhrd,
         return HDHRD_ERROR_NONE;
     }
     LOGLN10((LOG_INFO, LOGS "sending frame now", LOGP));
-    rv = mdhrd_peer_queue_frame(hdhrd, peer);
+    rv = hdhrd_peer_queue_frame(hdhrd, peer);
     return rv;
 }
 
 /*****************************************************************************/
 static int
-mdhrd_peer_process_msg_subscribe_audio(struct hdhrd_info* hdhrd,
+hdhrd_peer_process_msg_subscribe_audio(struct hdhrd_info* hdhrd,
                                       struct peer_info* peer,
                                       struct stream* in_s)
 {
@@ -261,10 +263,10 @@ hdhrd_peer_process_msg(struct hdhrd_info* hdhrd, struct peer_info* peer)
     switch (pdu_code)
     {
         case HDHRD_PDU_CODE_SUBSCRIBE_AUDIO:
-            rv = mdhrd_peer_process_msg_subscribe_audio(hdhrd, peer, in_s);
+            rv = hdhrd_peer_process_msg_subscribe_audio(hdhrd, peer, in_s);
             break;
         case HDHRD_PDU_CODE_REQUEST_VIDEO_FRAME:
-            rv = mdhrd_peer_process_msg_request_video_frame(hdhrd, peer, in_s);
+            rv = hdhrd_peer_process_msg_request_video_frame(hdhrd, peer, in_s);
             break;
     }
     return rv;
@@ -574,7 +576,7 @@ hdhrd_peer_queue_all_video(struct hdhrd_info* hdhrd)
     {
         if (peer->flags & HDHRD_PEER_REQUEST_VIDEO)
         {
-            mdhrd_peer_queue_frame(hdhrd, peer);
+            hdhrd_peer_queue_frame(hdhrd, peer);
             peer->flags &= ~HDHRD_PEER_REQUEST_VIDEO;
         }
         peer = peer->next;
