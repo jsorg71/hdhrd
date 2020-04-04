@@ -19,6 +19,10 @@
 #ifndef _HDHRD_H_
 #define _HDHRD_H_
 
+#define HDHRD_VERSION_MAJOR 0
+#define HDHRD_VERSION_MINOR 1
+#define HDHRD_AUDIO_LATENCY 1000
+
 #define HDHRD_BUFFER_SIZE (256 * 1024)
 #define HDHRD_SELECT_MSTIME 15
 #define HDHRD_SYNC_MSTIME 60000
@@ -31,6 +35,7 @@
 #define HDHRD_PDU_CODE_AUDIO                2
 #define HDHRD_PDU_CODE_REQUEST_VIDEO_FRAME  3
 #define HDHRD_PDU_CODE_VIDEO                4
+#define HDHRD_PDU_CODE_VERSION              5
 
 struct hdhrd_info
 {

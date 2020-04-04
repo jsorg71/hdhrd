@@ -522,6 +522,39 @@ hdhrd_peer_check_fds(struct hdhrd_info* hdhrd, fd_set* rfds, fd_set* wfds)
 }
 
 /*****************************************************************************/
+static int
+hdhrd_queue_version(struct hdhrd_info* hdhrd, struct peer_info* peer)
+{
+    struct stream* out_s;
+
+    (void)hdhrd;
+    out_s = (struct stream*)calloc(1, sizeof(struct stream));
+    if (out_s == NULL)
+    {
+        return HDHRD_ERROR_MEMORY;
+    }
+    out_s->data = (char*)malloc(1024);
+    if (out_s->data == NULL)
+    {
+        free(out_s);
+        return HDHRD_ERROR_MEMORY;
+    }
+    out_s->p = out_s->data;
+    out_uint32_le(out_s, HDHRD_PDU_CODE_VERSION);
+    out_uint32_le(out_s, 32);
+    out_uint32_le(out_s, HDHRD_VERSION_MAJOR);
+    out_uint32_le(out_s, HDHRD_VERSION_MINOR);
+    out_uint32_le(out_s, HDHRD_AUDIO_LATENCY);
+    out_uint8s(out_s, 12);
+    out_s->end = out_s->p;
+    out_s->p = out_s->data;
+    hdhrd_peer_queue(peer, out_s);
+    free(out_s->data);
+    free(out_s);
+    return HDHRD_ERROR_NONE;
+}
+
+/*****************************************************************************/
 int
 hdhrd_peer_add_fd(struct hdhrd_info* hdhrd, int sck)
 {
@@ -543,6 +576,7 @@ hdhrd_peer_add_fd(struct hdhrd_info* hdhrd, int sck)
         hdhrd->peer_tail->next = peer;
         hdhrd->peer_tail = peer;
     }
+    hdhrd_queue_version(hdhrd, peer);
     return HDHRD_ERROR_NONE;
 }
 

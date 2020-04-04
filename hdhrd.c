@@ -21,6 +21,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -1134,7 +1135,7 @@ hdhrd_process_fds(struct hdhrd_info* hdhrd, struct settings_info* settings,
                     {
                         if (hdhrd->is_running == 0)
                         {
-                            if (hdhrd_start(hdhrd, settings) == 0)
+                            if (hdhrd_start(hdhrd, settings) == HDHRD_ERROR_NONE)
                             {
                                 hdhrd->is_running = 1;
                                 break;
@@ -1253,9 +1254,6 @@ main(int argc, char** argv)
         free(settings);
         return 1;
     }
-    signal(SIGINT, sig_int);
-    signal(SIGTERM, sig_int);
-    signal(SIGPIPE, sig_pipe);
     hdhrd->yami_fd = open("/dev/dri/renderD128", O_RDWR);
     if (hdhrd->yami_fd == -1)
     {
@@ -1324,6 +1322,9 @@ main(int argc, char** argv)
         free(hdhrd);
         return 1;
     }
+    signal(SIGINT, sig_int);
+    signal(SIGTERM, sig_int);
+    signal(SIGPIPE, sig_pipe);
     for (;;)
     {
         if (hdhrd->is_running)
