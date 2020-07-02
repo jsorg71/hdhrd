@@ -526,6 +526,7 @@ static int
 hdhrd_queue_version(struct hdhrd_info* hdhrd, struct peer_info* peer)
 {
     struct stream* out_s;
+    int rv;
 
     (void)hdhrd;
     out_s = (struct stream*)calloc(1, sizeof(struct stream));
@@ -548,10 +549,10 @@ hdhrd_queue_version(struct hdhrd_info* hdhrd, struct peer_info* peer)
     out_uint8s(out_s, 12);
     out_s->end = out_s->p;
     out_s->p = out_s->data;
-    hdhrd_peer_queue(peer, out_s);
+    rv = hdhrd_peer_queue(peer, out_s);
     free(out_s->data);
     free(out_s);
-    return HDHRD_ERROR_NONE;
+    return rv;
 }
 
 /*****************************************************************************/
@@ -603,6 +604,7 @@ hdhrd_peer_cleanup(struct hdhrd_info* hdhrd)
 int
 hdhrd_peer_queue_all_video(struct hdhrd_info* hdhrd)
 {
+    int rv;
     struct peer_info* peer;
 
     peer = hdhrd->peer_head;
@@ -610,7 +612,11 @@ hdhrd_peer_queue_all_video(struct hdhrd_info* hdhrd)
     {
         if (peer->flags & HDHRD_PEER_REQUEST_VIDEO)
         {
-            hdhrd_peer_queue_frame(hdhrd, peer);
+            rv = hdhrd_peer_queue_frame(hdhrd, peer);
+            if (rv != HDHRD_ERROR_NONE)
+            {
+                return rv;
+            }
             peer->flags &= ~HDHRD_PEER_REQUEST_VIDEO;
         }
         peer = peer->next;
@@ -655,6 +661,11 @@ hdhrd_peer_queue(struct peer_info* peer, struct stream* out_s)
     }
     if (out_s->data == NULL)
     {
+        if (out_s->fd < 1)
+        {
+            free(lout_s);
+            return HDHRD_ERROR_FD;
+        }
         lout_s->fd = dup(out_s->fd);
         if (lout_s->fd == -1)
         {
