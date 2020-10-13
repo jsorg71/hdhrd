@@ -41,6 +41,8 @@ struct peer_info
 {
     int sck;
     int flags;
+    int got_subscribe_audio; /* boolean */
+    int got_request_video; /* boolean */
     int video_frame_count;
     int pad0;
     struct stream* out_s_head;
@@ -198,7 +200,7 @@ hdhrd_peer_process_msg_request_video_frame(struct hdhrd_info* hdhrd,
 
     (void)in_s;
 
-    if (peer->flags & HDHRD_PEER_REQUEST_VIDEO)
+    if (peer->got_request_video)
     {
         LOGLN10((LOG_INFO, LOGS "already requested", LOGP));
         return HDHRD_ERROR_NONE;
@@ -207,7 +209,7 @@ hdhrd_peer_process_msg_request_video_frame(struct hdhrd_info* hdhrd,
         (peer->video_frame_count == hdhrd->video_frame_count))
     {
         LOGLN10((LOG_INFO, LOGS "set to get next frame", LOGP));
-        peer->flags |= HDHRD_PEER_REQUEST_VIDEO;
+        peer->got_request_video = 1;
         return HDHRD_ERROR_NONE;
     }
     LOGLN10((LOG_INFO, LOGS "sending frame now", LOGP));
@@ -228,11 +230,11 @@ hdhrd_peer_process_msg_subscribe_audio(struct hdhrd_info* hdhrd,
     in_uint8(in_s, val8);
     if (val8)
     {
-        peer->flags |= HDHRD_PEER_SUBSCRIBE_AUDIO;
+        peer->got_subscribe_audio = 1;
     }
     else
     {
-        peer->flags &= ~HDHRD_PEER_SUBSCRIBE_AUDIO;
+        peer->got_subscribe_audio = 0;
     }
     return HDHRD_ERROR_NONE;
 }
@@ -610,14 +612,14 @@ hdhrd_peer_queue_all_video(struct hdhrd_info* hdhrd)
     peer = hdhrd->peer_head;
     while (peer != NULL)
     {
-        if (peer->flags & HDHRD_PEER_REQUEST_VIDEO)
+        if (peer->got_request_video)
         {
             rv = hdhrd_peer_queue_frame(hdhrd, peer);
             if (rv != HDHRD_ERROR_NONE)
             {
                 return rv;
             }
-            peer->flags &= ~HDHRD_PEER_REQUEST_VIDEO;
+            peer->got_request_video = 0;
         }
         peer = peer->next;
     }
@@ -634,7 +636,7 @@ hdhrd_peer_queue_all_audio(struct hdhrd_info* hdhrd, struct stream* out_s)
     peer = hdhrd->peer_head;
     while (peer != NULL)
     {
-        if (peer->flags & HDHRD_PEER_SUBSCRIBE_AUDIO)
+        if (peer->got_subscribe_audio)
         {
             rv = hdhrd_peer_queue(peer, out_s);
             if (rv != HDHRD_ERROR_NONE)

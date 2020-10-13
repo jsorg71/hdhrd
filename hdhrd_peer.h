@@ -19,9 +19,6 @@
 #ifndef _HDHRD_PEER_H_
 #define _HDHRD_PEER_H_
 
-#define HDHRD_PEER_SUBSCRIBE_AUDIO      1
-#define HDHRD_PEER_REQUEST_VIDEO        2
-
 int
 hdhrd_peer_get_fds(struct hdhrd_info* hdhrd, int* max_fd,
                    fd_set* rfds, fd_set* wfds);
