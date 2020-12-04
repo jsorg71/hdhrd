@@ -91,7 +91,7 @@ logln(int log_level, const char* format, ...)
 
     if (log_level < g_log_level)
     {
-        log_line = (char*)malloc(2048);
+        log_line = xnew(char, 2048);
         if (log_line == NULL)
         {
             return HDHRD_ERROR_MEMORY;

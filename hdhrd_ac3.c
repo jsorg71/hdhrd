@@ -24,6 +24,7 @@
 
 #include "hdhrd_ac3.h"
 #include "hdhrd_error.h"
+#include "hdhrd_utils.h"
 
 static const int g_ac3_channels[8] = { 2, 1, 2, 3, 3, 4, 4, 5 };
 
@@ -166,7 +167,7 @@ hdhrd_ac3_decode(void* obj, void* cdata, int cdata_bytes,
                     self->channels++;
                 }
                 self->bit_rate = bit_rate;
-                self->cdata = (uint8_t*)malloc(1024 * 1024);
+                self->cdata = xnew(uint8_t, 1024 * 1024);
                 if (self->cdata == NULL)
                 {
                     return HDHRD_ERROR_MEMORY;

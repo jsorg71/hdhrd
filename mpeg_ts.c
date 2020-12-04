@@ -25,6 +25,7 @@
 #include "mpeg_ts.h"
 #include "hdhrd_log.h"
 #include "hdhrd_error.h"
+#include "hdhrd_utils.h"
 
 /*****************************************************************************/
 static int
@@ -64,13 +65,13 @@ process_pid(struct tmpegts_cb* cb, struct stream* in_s,
             {
                 if (s == NULL)
                 {
-                    s = (struct stream*)calloc(1, sizeof(struct stream));
+                    s = xnew0(struct stream, 1);
                     if (s == NULL)
                     {
                         return HDHRD_ERROR_MEMORY;
                     }
                     s->size = 1024 * 1024;
-                    s->data = (char*)malloc(s->size);
+                    s->data = xnew(char, s->size);
                     if (s->data == NULL)
                     {
                         free(s);

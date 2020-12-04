@@ -19,6 +19,9 @@
 #ifndef _HDHRD_UTILS_H_
 #define _HDHRD_UTILS_H_
 
+#define xnew(type_, count_) (type_ *) malloc(count_ * sizeof(type_))
+#define xnew0(type_, count_) (type_ *) calloc(count_, sizeof(type_))
+
 int
 get_mstime(int* mstime);
 int
