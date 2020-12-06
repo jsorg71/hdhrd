@@ -326,11 +326,11 @@ hdhrd_process_ai(struct hdhrd_info* hdhrd)
                     }
                     LOGLN10((LOG_DEBUG, LOGS "channels %d bytes %d",
                              LOGP, channels, bytes));
-                    out_s = (struct stream*)calloc(1, sizeof(struct stream));
+                    out_s = xnew0(struct stream, 1);
                     if (out_s != NULL)
                     {
                         out_s->size = bytes + 1024;
-                        out_s->data = (char*)malloc(out_s->size);
+                        out_s->data = xnew(char, out_s->size);
                         if (out_s->data != NULL)
                         {
                             out_s->p = out_s->data;
@@ -429,12 +429,12 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
                 LOGP, hdhrd->video_info_bytes));
         return 0;
     }
-    vi = (struct video_info*)calloc(1, sizeof(struct video_info));
+    vi = xnew0(struct video_info, 1);
     if (vi == NULL)
     {
         return HDHRD_ERROR_MEMORY;
     }
-    vi->s = (struct stream*)calloc(1, sizeof(struct stream));
+    vi->s = xnew0(struct stream, 1);
     if (vi->s == NULL)
     {
         free(vi);
@@ -442,7 +442,7 @@ tmpegts_video_cb(struct pid_info* pi, void* udata)
     }
     cdata_bytes = (int)(s->end - s->p);
     vi->s->size = cdata_bytes;
-    vi->s->data = (char*)malloc(vi->s->size);
+    vi->s->data = xnew(char, vi->s->size);
     if (vi->s->data == NULL)
     {
         free(vi->s);
@@ -525,12 +525,12 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
                 LOGP, hdhrd->audio_info_bytes));
         return HDHRD_ERROR_RANGE;
     }
-    ai = (struct audio_info*)calloc(1, sizeof(struct audio_info));
+    ai = xnew0(struct audio_info, 1);
     if (ai == NULL)
     {
         return HDHRD_ERROR_MEMORY;
     }
-    ai->s = (struct stream*)calloc(1, sizeof(struct stream));
+    ai->s = xnew0(struct stream, 1);
     if (ai->s == NULL)
     {
         free(ai);
@@ -538,7 +538,7 @@ tmpegts_audio_cb(struct pid_info* pi, void* udata)
     }
     cdata_bytes = (int)(s->end - s->p);
     ai->s->size = cdata_bytes;
-    ai->s->data = (char*)malloc(ai->s->size);
+    ai->s->data = xnew(char, ai->s->size);
     if (ai->s->data == NULL)
     {
         free(ai->s);
@@ -593,6 +593,8 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
     int audio_pid;
     struct hdhrd_info* hdhrd;
     struct stream* s;
+    char video_type[8];
+    char audio_type[8];
 
     LOGLN10((LOG_INFO, LOGS "bytes %d", LOGP,
              (int)(pi->s->end - pi->s->data)));
@@ -646,6 +648,8 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
         in_uint8s(s, program_info_length);
         video_pid = 0;
         audio_pid = 0;
+        video_type[0] = 0;
+        audio_type[0] = 0;
         while (s_check_rem(s, 9)) /* last 4 bytes is crc */
         {
             in_uint8(s, stream_type);
@@ -661,18 +665,22 @@ tmpegts_program_cb(struct pid_info* pi, void* udata)
             if ((stream_type == 0x02) && (video_pid == 0)) /* mpeg2 */
             {
                 video_pid = elementary_pid;
+                strncpy(video_type, "mpeg2", sizeof(video_type));
             }
             if ((stream_type == 0x81) && (audio_pid == 0)) /* ac3 */
             {
                 audio_pid = elementary_pid;
+                strncpy(audio_type, "ac3", sizeof(video_type));
             }
         }
         if ((video_pid != 0) && (audio_pid != 0))
         {
-            LOGLN0((LOG_INFO, LOGS "adding video pid 0x%4.4x", LOGP, video_pid));
+            LOGLN0((LOG_INFO, LOGS "adding video(%s) pid 0x%4.4x", LOGP,
+                    video_type, video_pid));
             hdhrd->cb.pids[2] = video_pid;
             hdhrd->cb.procs[2] = tmpegts_video_cb;
-            LOGLN0((LOG_INFO, LOGS "adding audio pid 0x%4.4x", LOGP, audio_pid));
+            LOGLN0((LOG_INFO, LOGS "adding audio(%s) pid 0x%4.4x", LOGP,
+                    audio_type, audio_pid));
             hdhrd->cb.pids[3] = audio_pid;
             hdhrd->cb.procs[3] = tmpegts_audio_cb;
             hdhrd->cb.num_pids = 4;
@@ -726,7 +734,7 @@ tmpegts_pid0_cb(struct pid_info* pi, void* udata)
     {
         return HDHRD_ERROR_RANGE;
     }
-    LOGLN10((LOG_INFO, LOGS "ection_length %d", LOGP, section_length));
+    LOGLN10((LOG_INFO, LOGS "section_length %d", LOGP, section_length));
     if (hdhrd->cb.num_pids != 1)
     {
         return HDHRD_ERROR_NONE;
@@ -1198,10 +1206,10 @@ main(int argc, char** argv)
     socklen_t sock_len;
     struct settings_info* settings;
 
-    settings = (struct settings_info*)calloc(1, sizeof(struct settings_info));
+    settings = xnew0(struct settings_info, 1);
     if (settings == NULL)
     {
-        LOGLN0((LOG_ERROR, LOGS "calloc failed", LOGP));
+        LOGLN0((LOG_ERROR, LOGS "xnew0 failed", LOGP));
         return 1;
     }
     if (process_args(argc, argv, settings) != 0)
@@ -1247,10 +1255,10 @@ main(int argc, char** argv)
         pid = getpid();
         log_init(LOG_FLAG_STDOUT, 4, NULL);
     }
-    hdhrd = (struct hdhrd_info*)calloc(1, sizeof(struct hdhrd_info));
+    hdhrd = xnew0(struct hdhrd_info, 1);
     if (hdhrd == NULL)
     {
-        LOGLN0((LOG_ERROR, LOGS "calloc failed", LOGP));
+        LOGLN0((LOG_ERROR, LOGS "xnew0 failed", LOGP));
         free(settings);
         return 1;
     }

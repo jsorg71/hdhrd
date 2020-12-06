@@ -51,7 +51,7 @@ hdhrd_ac3_create(void** obj)
     {
         return HDHRD_ERROR_PARAM;
     }
-    self = (struct mycodec_audio*)calloc(1, sizeof(struct mycodec_audio));
+    self = xnew0(struct mycodec_audio, 1);
     if (self == NULL)
     {
         return HDHRD_ERROR_MEMORY;
